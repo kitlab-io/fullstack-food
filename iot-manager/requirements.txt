@@ -1,0 +1,12 @@
+aioesphomeapi==29.0.2
+aiohappyeyeballs==2.4.6
+async_interrupt==1.2.1
+asyncio==3.4.3
+cffi==1.17.1
+chacha20poly1305-reuseable==0.13.2
+cryptography==44.0.1
+ifaddr==0.2.0
+noiseprotocol==0.3.1
+protobuf==5.29.3
+pycparser==2.22
+zeroconf==0.144.3
