@@ -1,0 +1,1 @@
+Adafruit CircuitPython 9.2.4 on 2025-01-29; M5Stack Stick C with ESP32
