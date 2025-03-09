@@ -108,3 +108,61 @@ Delete countdown timer rules:<br/>
 
 
 
+## Notes on GPIO for RPi
+
+removing python3-rpi.gpio (0.7.1~a4-1+b4) ...
+Blinka Found existing installation: RPi.GPIO 0.7.1
+Blinka Uninstalling RPi.GPIO-0.7.1:
+Blinka Successfully uninstalled RPi.GPIO-0.7.1
+Blinka Looking in indexes: https://pypi.org/simple, https://www.piwheels.org/simple
+Blinka Collecting rpi-lgpio
+Blinka Downloading https://www.piwheels.org/simple/rpi-lgpio/rpi_lgpio-0.6-py3-none-any.whl (11 kB)
+Blinka Collecting lgpio>=0.1.0.1
+Blinka Downloading lgpio-0.2.2.0-cp311-cp311-manylinux_2_34_aarch64.whl (364 kB)
+Blinka ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 364.8/364.8 kB 1.5 MB/s eta 0:00:00
+Blinka 
+Blinka Installing collected packages: lgpio, rpi-lgpio
+Blinka Successfully installed lgpio-0.2.2.0 rpi-lgpio-0.6
+DONE.
+
+## Notes on i2C sensors
+
+(venv-global) fullstackfood@raspberrypi:~ $ sudo i2cdetect -y 1
+     0  1  2  3  4  5  6  7  8  9  a  b  c  d  e  f
+00:                         -- -- -- -- -- -- -- -- 
+10: -- -- -- -- -- -- -- -- 18 -- -- -- -- -- -- -- 
+20: -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- 
+30: -- -- -- -- -- -- 36 -- 38 -- -- -- -- -- -- -- 
+40: -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- 
+50: -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- 
+60: -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- 
+70: -- -- -- -- -- -- -- --                         
+(venv-global) fullstackfood@raspberrypi:~ $ python /home/fullstackfood/fullstack-food/iot-manager/sensor_i2c.py
+temp: 21.74606557578
+mois: 930
+temp: 21.334002221880002
+mois: 914
+temp: 21.84596480844
+mois: 885
+temp: 21.44014229556
+mois: 872
+temp: 21.74606557578
+mois: 328
+temp: 21.945864041100002
+mois: 329
+temp: 21.74606557578
+mois: 324
+temp: 21.84596480844
+mois: 332
+temp: 22.05200411478
+mois: 736
+temp: 22.15190334744
+mois: 743
+temp: 22.05200411478
+mois: 742
+temp: 22.15190334744
+mois: 337
+temp: 22.15190334744
+mois: 813
+temp: 22.05200411478
+mois: 812
