@@ -166,3 +166,17 @@ temp: 22.15190334744
 mois: 813
 temp: 22.05200411478
 mois: 812
+
+### Analog Soil Moisture Sensor
+
+Reading ADS1x15 values, press Ctrl-C to quit...
+|      0 |      1 |      2 |      3 |
+-------------------------------------
+|  16715 |   4712 |   4738 |   4709 |
+|  16715 |   4716 |   4714 |   4762 |
+
+GAIN = 1
+value range:
+- sensor in air: 17000
+- sensor in dry soil: 15000 - 16000
+- sensor in wet soil: <13000

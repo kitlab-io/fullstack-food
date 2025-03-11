@@ -13,7 +13,8 @@ i2c = board.I2C()  # uses board.SCL and board.SDA
 # i2c = board.STEMMA_I2C()  # For using the built-in STEMMA QT connector on a microcontroller
 
 # Create the TCA9548A object and give it the I2C bus
-tca = adafruit_tca9548a.TCA9548A(i2c)
+tca = adafruit_tca9548a.TCA9548A(i2c, 0x70)
+tca2 = adafruit_tca9548a.TCA9548A(i2c, 0x71)
 
 for channel in range(8):
     if tca[channel].try_lock():
@@ -29,8 +30,21 @@ import adafruit_ahtx0
 while True:
 	
 	for i in range(2):
+		print("tca 1")
 		sensor = adafruit_ahtx0.AHTx0(tca[i])
 		print("\nTemperature: %0.1f C" % sensor.temperature)
 		print("Humidity: %0.1f %%" % sensor.relative_humidity)
+		
+		# test 1 MUX for AHT sensor + 1 MUX for 
+		# https://learn.adafruit.com/working-with-multiple-i2c-devices/circuitpython-5
+		
+		print("tca 2")
+		sensor = adafruit_ahtx0.AHTx0(tca2[i])
+		print("\nTemperature: %0.1f C" % sensor.temperature)
+		print("Humidity: %0.1f %%" % sensor.relative_humidity)
+    
+    
     
 	time.sleep(2)
+
+
