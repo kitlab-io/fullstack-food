@@ -1,0 +1,34 @@
+protocols:
+  default:
+    light_cwww:
+      repeat:
+        d: 1
+        h: 0
+        m: 0
+        s: 0
+      action: on, 100, sunramp
+      start_time: 
+        h: 8
+        m: 0
+        s: 0
+      duration: 
+        h: 12
+        m: 0
+        s: 0
+    
+    water_pump:
+      trigger: 
+        soil_moisture, lt, 80
+      action: on
+      duration: 30s  
+    
+    heat_wire:
+      trigger: 
+        soil_temp, lt, 70
+      action: on
+      duration: 5m  
+    
+    fan:
+      repeat: 6h
+      action: on, 100
+      duration: 3m

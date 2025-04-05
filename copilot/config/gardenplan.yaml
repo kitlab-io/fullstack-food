@@ -1,0 +1,51 @@
+zones: 
+  bin:
+  rack:
+    levels:
+      -
+        bins:
+          - 
+            plants: 
+              - 
+                species: sweet_potato
+                seeds: 1
+      -
+        bins:
+          - 
+          -
+      -
+        tower:
+          bins:
+            -
+            -
+            -
+
+devices: 
+  lights:
+    - 
+
+
+
+protocols:
+  default:
+    light:
+      repeat: 1d
+      action: on, 100, sunramp
+      duration: 16h
+    
+    water:
+      trigger: 
+        soil_moisture, lt, 80
+      action: on
+      duration: 30s  
+    
+    heat:
+      trigger: 
+        soil_temp, lt, 70
+      action: on
+      duration: 5m  
+    
+    fan:
+      repeat: 6h
+      action: on, 100
+      duration: 3m
