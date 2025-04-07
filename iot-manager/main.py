@@ -83,20 +83,37 @@ def schedule_lights(protocol_task, devices):
     on_datetime = scheduler.get_date_start() + timedelta(hours=on_time[0], minutes=on_time[1], seconds=on_time[2])
     off_datetime = scheduler.get_date_start() + timedelta(hours=off_time[0], minutes=off_time[1], seconds=off_time[2])
     
+    # test instant scheduling
     metadata = {
         "type": "light_cwww",
         "on_datetime": on_datetime.isoformat(),
         "off_datetime": off_datetime.isoformat()
     }
-    # lights on 
-    # scheduler.schedule_action(on_datetime, scheduler.job_lights_on, metadata)
-    # lights off
-    # scheduler.schedule_action(off_datetime, scheduler.job_lights_off, metadata)
-    
-    # test instant scheduling
     scheduler.schedule_action_now(job_lights_on, metadata)
     scheduler.schedule_action_now(job_lights_off, metadata)
     
+    # default: repeat for 30 times (~30 days)
+    repeat_limit = 3
+    repeat_iter = 0
+    if 'repeat' in protocol_task:
+        r = protocol_task['repeat']
+        while repeat_iter < repeat_limit:
+            
+            metadata = {
+                "type": "light_cwww",
+                "on_datetime": on_datetime.isoformat(),
+                "off_datetime": off_datetime.isoformat()
+            }
+            
+            scheduler.schedule_action(on_datetime, job_lights_on, metadata)
+            scheduler.schedule_action(off_datetime, job_lights_off, metadata)
+            
+            on_datetime += timedelta(days=r['d'], hours=r['h'], minutes=r['m'], seconds=r['s'])
+            
+            off_datetime += timedelta(days=r['d'], hours=r['h'], minutes=r['m'], seconds=r['s'])
+            
+            repeat_iter += 1
+        
     
 def schedule_heat(timing, action):
     print(timing)

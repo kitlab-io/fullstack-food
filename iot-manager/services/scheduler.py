@@ -4,11 +4,12 @@ from rq.job import Job
 from rq.repeat import Repeat
 
 from datetime import timedelta, datetime
-
+import services.queues as queues
+from utils import logger
 # rq worker --with-scheduler
 
-r = Redis()
-q = Queue(connection=r)
+# r = Redis()
+# q = Queue(connection=r)
 
 # job = q.enqueue_in(timedelta(seconds=10), sensors.read_air_temperature_humidity)
 
@@ -24,10 +25,21 @@ q = Queue(connection=r)
 # Use different intervals between repetitions
 # job = q.enqueue(say_hello, repeat=Repeat(times=3, interval=[10, 30, 60])
 
+def get_seconds(d, h, m, s):
+    return d*24*60*60 + h*60*60 + m*60 + s
+
 def get_date_start():
     today = datetime.today()
     # return [today.year, today.month, today.day]
     return today
+
+def get_queue(metadata):
+    if 'type' in metadata:
+        q = queues.get_queue(metadata['type'])
+    else:
+        q = queues.get_queue()
+        
+    return q
 
 def get_start_stop_times(protocol_task):
     start_time = None
@@ -38,35 +50,41 @@ def get_start_stop_times(protocol_task):
     
     start_time = [start['h'], start['m'], start['s']]
     stop_time = [start['h']+duration['h'], start['m']+duration['m'], start['s']+duration['s']]
-
-    # if 'repeat' in protocol_task:
-    #     pass
     
     return start_time, stop_time
 
 def set_job_metadata(job, metadata):
     for key in metadata:
-        print(key)
-        print(metadata[key])
+        # logger.info(key)
+        # logger.info(metadata[key])
         job.meta[key] = metadata[key]
         job.save_meta()
 
 def schedule_action(action_datetime, action, metadata={}):
-    print('schedule_action')
-    print(action_datetime)
-    print(action)
-    print(metadata)
+    logger.info(f'schedule_action {action} {action_datetime} {metadata}')
+    q = get_queue(metadata)
     job = q.enqueue_at(action_datetime, action, metadata)
     set_job_metadata(job, metadata)
     
-    print('Job id: %s' % job.id)
-    print(job.meta)
+    logger.info(f'Job id: {job.id} {job.meta}')
     return job
+    
+# def schedule_repeating_action(protocol_task, action_datetime, action, metadata={}):
+#     # default: repeat for 30 days
+#     logger.info(f'schedule_repeating_action {action} {action_datetime} {metadata}')
+#     q = get_queue(metadata)
+    
+#     print(protocol_task)
     
     
 def schedule_action_now(action, metadata={}, delay_s=3):
-    print('schedule_action_now')
+    logger.info(f'schedule_action_now {action} {metadata}')
+    if 'type' in metadata:
+        q = queues.get_queue(metadata['type'])
+    else:
+        q = queues.get_queue()
+    
     job = q.enqueue_in(timedelta(seconds=delay_s), action, metadata)
     set_job_metadata(job, metadata)
-    
+
     return job
