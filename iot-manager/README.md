@@ -1,3 +1,45 @@
+# Setup on Orange Pi Zero 2W 
+- tested on Orange Pi Zero 2W 4GB (TBD 1GB)
+- Python 3.11
+
+Install debian bookworm 10.2 desktop xfce linux 6.1.31
+sudo apt install python3.11-venv
+sudo apt-get install python3-dev
+python3 -m venv venv
+pip3 install Adaftuit-Blinka
+pip3 install -r fullstack-food/iot-manager/requirements.txt
+
+Remove Raspberry Pi packages?
+rpi-lgpio==0.6
+rpi-ws281x==5.0.0
+RPi.GPIO==0.7.1
+
+# Running all services
+
+core services:
+- redis database 
+- redis queue worker
+
+user interface services:
+- flask web app backend
+- single page web app frontend
+
+admin/dev services:
+- redis queue dashboard
+
+```bash
+# set working directory
+cd iot-manager
+# set PYTHONPATH
+
+# start redis database
+
+# start redis queue worker
+
+# check if protocol is scheduled
+# and schedule works
+```
+
 # Simple Python library to control the TP-Link Kasa Smart Power Strip
 
 Simple Python library to control the TP-Link Kasa Smart Power Strip (HW 1.0)<br/>
