@@ -1,3 +1,5 @@
+from datastore import add_sensor_reading
+
 def read_air_temperature_humidity():
     print('air_temperature_humidity')
     
@@ -13,3 +15,5 @@ def read_ambient_light():
 def read_water_level():
     print('water_level')
     
+
+add_sensor_reading('soil_temp', { 'temp_c': 20 })
