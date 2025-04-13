@@ -16,4 +16,4 @@ def read_water_level():
     print('water_level')
     
 
-add_sensor_reading('soil_temp', { 'temp_c': 20 })
+# add_sensor_reading('soil_temp', { 'temp_c': 20 })

@@ -5,15 +5,21 @@ from datetime import datetime, timedelta
 
 from services import scheduler, sensors, actuators, camera
 from services.worker import job_lights_off, job_lights_on, job_camera_photo, job_read_sensors
-import devices
+# import devices
 
-path_config_devices = pathlib.Path('./config/devices.yaml')
-path_config_protocols = pathlib.Path('./config/protocols.yaml')
+from pathlib import Path
+
+from utils import base_dir
+
+path_config_devices = Path(*[base_dir, 'config','devices.yaml'])
+path_config_protocols = Path(*[base_dir, 'config','protocols.yaml'])
+ 
 
 config = {
-    "devices": path_config_devices,
-    "protocols": path_config_protocols
+    "devices": str(path_config_devices),
+    "protocols": str(path_config_protocols)
 }
+print(config)
 
 repeat_limit = 3
 system_devices = {}
@@ -191,8 +197,9 @@ def schedule_jobs(protocols, devices):
     
     # scheduler.work()
 
-def load_config(config):
-    global config_devices, config_protocols
+# expose configuration to any module importing this module
+def load_config():
+    global config, config_devices, config_protocols
     print(config)
     config_devices = load_yaml(config['devices'])['devices']
     config_protocols = load_yaml(config['protocols'])['protocols']

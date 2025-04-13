@@ -5,7 +5,8 @@ from rq.repeat import Repeat
 
 from datetime import timedelta, datetime
 
-from devices import system_devices, Sensor
+# from system import system_devices
+from devices import Sensor, system_devices
 from utils import logger
 
 from datastore import add_sensor_reading

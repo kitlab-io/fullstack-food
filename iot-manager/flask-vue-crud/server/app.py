@@ -2,7 +2,8 @@ import uuid
 
 from flask import Flask, jsonify, request
 from flask_cors import CORS
-
+from utils import logger, load_yaml
+from system import load_config
 
 BOOKS = [
     {
@@ -45,6 +46,26 @@ def remove_book(book_id):
 @app.route('/ping', methods=['GET'])
 def ping_pong():
     return jsonify('pong!')
+
+
+@app.route('/config', methods=['GET', 'POST'])
+def config():
+    response_object = {'status': 'success'}
+    if request.method == 'POST':
+        post_data = request.get_json()
+        # BOOKS.append({
+        #     'id': uuid.uuid4().hex,
+        #     'title': post_data.get('title'),
+        #     'author': post_data.get('author'),
+        #     'read': post_data.get('read')
+        # })
+        response_object['message'] = 'Config updated!'
+    else:
+        config_protocols, config_devices = load_config()
+        response_object['protocols'] = config_protocols
+        response_object['devices'] = config_devices
+        
+    return jsonify(response_object)
 
 
 @app.route('/books', methods=['GET', 'POST'])
