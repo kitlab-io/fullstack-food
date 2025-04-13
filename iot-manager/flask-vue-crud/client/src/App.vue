@@ -12,6 +12,9 @@
               <router-link class="nav-link" to="/">Sensor Data</router-link>
             </li>
             <li class="nav-item">
+              <router-link class="nav-link" to="/photos">Photo Gallery</router-link>
+            </li>
+            <li class="nav-item">
               <router-link class="nav-link" to="/books">Books</router-link>
             </li>
             <li class="nav-item">
