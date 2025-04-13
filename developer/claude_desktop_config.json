@@ -1,0 +1,33 @@
+{
+    "mcpServers": {
+        "codemcp": {
+            "command": "/Users/michael.garrido/.pyenv/versions/3.12.9/bin/python3.12",
+            "args": [
+                "-m",
+                "codemcp"
+            ]
+        },
+        "filesystem": {
+            "command": "/Users/michael.garrido/homebrew/bin/npx",
+            "args": [
+                "-y",
+                "@modelcontextprotocol/server-filesystem",
+                "/Users/michael.garrido/Desktop",
+                "/Users/michael.garrido/Downloads",
+                "/Users/michael.garrido/Documents"
+            ],
+            "env": {
+                "PATH": "/Users/michael.garrido/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
+            }
+        },
+        "blender": {
+            "command": "uvx",
+            "args": [
+                "blender-mcp"
+            ],
+            "env": {
+                "PATH": "/Users/michael.garrido/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
+            }
+        }
+    }
+}

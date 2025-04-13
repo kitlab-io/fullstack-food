@@ -16,6 +16,17 @@ Create virtualenv in /srv/iot-manager
 In virtualenv in  /srv/iot-manager
 pip3 install -r iot-manager/requirements.txt
 
+## Developer Setup: Coding Copilot
+With Claude Desktop, setup codemcp tool
+https://github.com/ezyang/codemcp
+
+See /developer for sample files:
+- .zshenv
+- developer/claude_desktop_config.json
+
+example of working codemcp server
+https://claude.ai/share/676df031-86b6-4632-ae4a-6d3c16b09f21
+
 ## Use
 To interact with sensors via Circuitpython librarires:
 python3 sensor_i2c.py
