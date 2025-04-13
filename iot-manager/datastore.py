@@ -8,7 +8,9 @@ from utils import base_dir
 
 Base = declarative_base()
 # https://docs.sqlalchemy.org/en/20/core/engines.html
-engine = create_engine(f'sqlite:////{base_dir}data/sensordata.db')
+path_db = f'sqlite:///{base_dir}/data/sensordata.db'
+print(path_db)
+engine = create_engine(path_db)
 Session = sessionmaker(bind=engine)
 connection = None
 
@@ -21,9 +23,11 @@ class SensorReading(Base):
     created_at = Column(DateTime, default=func.now())
     updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
 
-    def __init__(self, sensor_type, raw_data):
+    def __init__(self, sensor_type, raw_data, created_at=None):
         self.sensor_type = sensor_type
         self.raw_data = raw_data
+        if created_at is not None:
+            self.created_at = created_at
         
 class Photo(Base):
     __tablename__ = "photos"
@@ -52,9 +56,9 @@ def init():
     connection = engine.connect()
 
 
-def add_sensor_reading(sensor_type, raw_data):
+def add_sensor_reading(sensor_type, raw_data, created_at=None):
     session = Session()
-    sensor_reading = SensorReading(sensor_type, json.dumps(raw_data) )
+    sensor_reading = SensorReading(sensor_type, json.dumps(raw_data), created_at=created_at)
     session.add(sensor_reading)
     session.commit()
     session.close()

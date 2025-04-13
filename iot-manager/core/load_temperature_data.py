@@ -179,7 +179,7 @@ def insert_data_to_db(processed_data, batch_size=100):
         for record in batch:
             try:
                 # Add to database
-                add_sensor_reading(record['sensor_type'], record['data'])
+                add_sensor_reading(record['sensor_type'], record['data'], record['created_at'])
                 insert_count += 1
             except Exception as e:
                 logger.error(f"Error inserting record: {e}")
