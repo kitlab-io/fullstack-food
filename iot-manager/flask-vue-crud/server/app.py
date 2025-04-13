@@ -1,8 +1,13 @@
 import uuid
+import json
+import datetime
+import sqlite3
+import os
+from pathlib import Path
 
 from flask import Flask, jsonify, request
 from flask_cors import CORS
-from utils import logger, load_yaml
+from utils import logger, load_yaml, base_dir
 from system import load_config
 
 BOOKS = [
@@ -101,6 +106,77 @@ def single_book(book_id):
     if request.method == 'DELETE':
         remove_book(book_id)
         response_object['message'] = 'Book removed!'
+    return jsonify(response_object)
+
+
+@app.route('/api/sensor-data', methods=['GET'])
+def get_sensor_data():
+    response_object = {'status': 'success'}
+    try:
+        # Get query parameters for filtering
+        sensor_type = request.args.get('type', 'soil_temp')
+        days = int(request.args.get('days', 7))
+        
+        # Calculate date range
+        end_date = datetime.datetime.now()
+        start_date = end_date - datetime.timedelta(days=days)
+        
+        # Connect to the database
+        db_path = Path(base_dir) / 'data' / 'sensordata.db'
+        conn = sqlite3.connect(str(db_path))
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        
+        # Query sensor data
+        cursor.execute(
+            """
+            SELECT id, sensor_type, raw_data, created_at
+            FROM sensor_reading
+            WHERE sensor_type = ? AND created_at >= ?
+            ORDER BY created_at ASC
+            """,
+            (sensor_type, start_date.isoformat())
+        )
+        
+        # Process the results
+        data_points = []
+        for row in cursor.fetchall():
+            try:
+                raw_data = json.loads(row['raw_data'])
+                timestamp = datetime.datetime.fromisoformat(row['created_at']).timestamp() * 1000
+                
+                # Extract the temperature value from raw_data
+                if sensor_type == 'soil_temp' and 'temp_c' in raw_data:
+                    temp_value = raw_data['temp_c']
+                    data_points.append({
+                        'timestamp': timestamp,
+                        'value': temp_value
+                    })
+                elif sensor_type == 'air_temp_humidity' and 'temp_c' in raw_data:
+                    temp_value = raw_data['temp_c']
+                    data_points.append({
+                        'timestamp': timestamp,
+                        'value': temp_value
+                    })
+                elif sensor_type == 'air_temp_humidity_barometer' and 'temp_c' in raw_data:
+                    temp_value = raw_data['temp_c']
+                    data_points.append({
+                        'timestamp': timestamp,
+                        'value': temp_value
+                    })
+            except (json.JSONDecodeError, KeyError) as e:
+                logger.error(f"Error processing row {row['id']}: {e}")
+                continue
+        
+        conn.close()
+        
+        response_object['data'] = data_points
+        response_object['sensor_type'] = sensor_type
+        
+    except Exception as e:
+        logger.error(f"Error fetching sensor data: {e}")
+        response_object = {'status': 'error', 'message': str(e)}
+        
     return jsonify(response_object)
 
 
