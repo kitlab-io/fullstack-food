@@ -189,5 +189,127 @@ def get_sensor_data():
     return jsonify(response_object)
 
 
+@app.route('/api/photos', methods=['GET'])
+def get_photos():
+    response_object = {'status': 'success'}
+    try:
+        # Get query parameters for filtering
+        days = float(request.args.get('days', 30))  # Default to 30 days
+        plant_species = request.args.get('species')
+        location = request.args.get('location')
+        
+        # Calculate date range
+        end_date = datetime.datetime.now()
+        start_date = end_date - datetime.timedelta(days=days)
+        
+        # Connect to the database
+        media_db_path = Path(base_dir) / 'data' / 'media.db'
+        
+        # Check if the database exists, if not, create it
+        if not media_db_path.exists():
+            from db_init_photos import init_db, init_sample_data
+            init_db()
+            init_sample_data()
+            
+        conn = sqlite3.connect(str(media_db_path))
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        
+        # Build the query based on filters
+        query = """
+            SELECT id, filename, filepath, timestamp, plant_species, location, metadata, created_at
+            FROM photos
+            WHERE timestamp >= ?
+        """
+        params = [start_date.isoformat()]
+        
+        if plant_species:
+            query += " AND plant_species LIKE ?"
+            params.append(f"%{plant_species}%")
+            
+        if location:
+            query += " AND location LIKE ?"
+            params.append(f"%{location}%")
+            
+        query += " ORDER BY timestamp DESC"
+        
+        # Execute the query
+        cursor.execute(query, params)
+        
+        # Process the results
+        photos = []
+        for row in cursor.fetchall():
+            metadata = json.loads(row['metadata']) if row['metadata'] else {}
+            
+            photos.append({
+                'id': row['id'],
+                'filename': row['filename'],
+                'filepath': row['filepath'],
+                'timestamp': row['timestamp'],
+                'timestamp_ms': int(datetime.datetime.fromisoformat(row['timestamp']).timestamp() * 1000),
+                'plant_species': row['plant_species'],
+                'location': row['location'],
+                'metadata': metadata,
+                'created_at': row['created_at']
+            })
+        
+        conn.close()
+        
+        # Get unique plant species and locations for filtering options
+        conn = sqlite3.connect(str(media_db_path))
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        
+        cursor.execute("SELECT DISTINCT plant_species FROM photos ORDER BY plant_species")
+        species_list = [row['plant_species'] for row in cursor.fetchall()]
+        
+        cursor.execute("SELECT DISTINCT location FROM photos ORDER BY location")
+        location_list = [row['location'] for row in cursor.fetchall()]
+        
+        conn.close()
+        
+        response_object['photos'] = photos
+        response_object['filter_options'] = {
+            'species': species_list,
+            'locations': location_list
+        }
+        
+    except Exception as e:
+        logger.error(f"Error fetching photos: {e}")
+        response_object = {'status': 'error', 'message': str(e)}
+    
+    return jsonify(response_object)
+
+
+@app.route('/api/photos/<photo_id>', methods=['GET'])
+def get_photo(photo_id):
+    try:
+        # Connect to the database
+        media_db_path = Path(base_dir) / 'data' / 'media.db'
+        conn = sqlite3.connect(str(media_db_path))
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        
+        # Get the photo record
+        cursor.execute("SELECT filepath FROM photos WHERE id = ?", (photo_id,))
+        photo = cursor.fetchone()
+        
+        if not photo:
+            return jsonify({'status': 'error', 'message': 'Photo not found'}), 404
+        
+        # Get the actual file path
+        photo_path = Path(base_dir) / photo['filepath'].lstrip('/')
+        
+        if not photo_path.exists():
+            return jsonify({'status': 'error', 'message': 'Photo file not found'}), 404
+        
+        # Return the file
+        return send_file(str(photo_path))
+        
+    except Exception as e:
+        logger.error(f"Error serving photo {photo_id}: {e}")
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
+
 if __name__ == '__main__':
     app.run()

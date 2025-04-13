@@ -1,8 +1,12 @@
-# Developing a Single Page App with Flask and Vue.js
+# IoT Plant Manager Dashboard
 
-### Want to learn how to build this?
+This project is a web application for monitoring and managing an IoT-based smart gardening system, with features for sensor data visualization, photo gallery with timeline view, and system management.
 
-Check out the [tutorial](https://testdriven.io/developing-a-single-page-app-with-flask-and-vuejs).
+## Features
+
+- **Sensor Data Visualization**: View temperature and other environmental data with interactive charts
+- **Photo Gallery**: Browse plant growth photos with metadata in a zoomable timeline view
+- **System Configuration**: Manage system settings and device configurations
 
 ## Want to use this project?
 
