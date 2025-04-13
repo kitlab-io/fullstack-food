@@ -31,13 +31,21 @@ admin/dev services:
 # set working directory
 cd iot-manager
 # set PYTHONPATH
+export PYTHONPATH="/Users/michael.garrido/Documents/GitHub/kitlab-io/fullstack-food/iot-manager":$PYTHONPATH
+
+# activate virutal environment
+source .venv/bin/activate
 
 # start redis database
+redis-server
 
 # start redis queue worker
-
+python services
 # check if protocol is scheduled
 # and schedule works
+
+# for debug, run redis queue dashboard
+rq-dashboard
 ```
 
 # Simple Python library to control the TP-Link Kasa Smart Power Strip

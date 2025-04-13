@@ -1,11 +1,15 @@
 import yaml
 import pathlib
+from datetime import datetime, timezone
 
 def load_yaml(path_yaml):
     with open(path_yaml, 'r') as file:
         data = yaml.safe_load(file)
     # print(data)
     return data
+
+def now_str():
+    return datetime.now(timezone.utc).strftime('%Y-%m-%d:%H:%M:%S.%fZ')
 
 import logging
 # from test_div import test_division 
