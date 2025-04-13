@@ -199,7 +199,8 @@ function renderChart() {
 }
 
 // Watch for changes in data or dimensions to redraw chart
-watch(() => [props.data, chartId.value, width.value, height.value, xDomain.value, yDomain.value], 
+watch(() => [props.data],
+// watch(() => [props.data, chartId.value, width.value, height.value, xDomain.value, yDomain.value], 
     () => renderChart(),
     { deep: true }
 );

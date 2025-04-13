@@ -43,13 +43,15 @@ const chartColor = computed(() => {
   return sensorColors[selectedSensorType.value] || '#ff7f0e';
 });
 
+const baseUrlApi = "http://localhost:5001"; // Replace with your API base URL
+
 // Fetch data from API
 async function fetchTemperatureData() {
   loading.value = true;
   error.value = null;
   
   try {
-    const response = await axios.get('/api/sensor-data', {
+    const response = await axios.get(baseUrlApi+'/api/sensor-data', {
       params: {
         type: selectedSensorType.value,
         days: timeRange.value
