@@ -4,8 +4,11 @@ from sqlalchemy.sql import func
 
 import json
 
+from utils import base_dir
+
 Base = declarative_base()
-engine = create_engine('sqlite:///data/sensordata.db')
+# https://docs.sqlalchemy.org/en/20/core/engines.html
+engine = create_engine(f'sqlite:////{base_dir}data/sensordata.db')
 Session = sessionmaker(bind=engine)
 connection = None
 

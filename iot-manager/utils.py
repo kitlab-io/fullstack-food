@@ -1,5 +1,5 @@
 import yaml
-import pathlib
+from pathlib import Path
 from datetime import datetime, timezone
 
 def load_yaml(path_yaml):
@@ -18,7 +18,11 @@ import logging
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
-log_filepath = pathlib.Path('./system.log')
+base_dir = Path(__file__).parent.resolve()
+# Prints the directory containing the current file
+print(f'base directorty: {base_dir}') 
+
+log_filepath = Path(*[base_dir, 'system.log'])
 
 # configure the handler and formatter as needed
 log_file_mode = 'a+'

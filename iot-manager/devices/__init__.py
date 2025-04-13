@@ -181,13 +181,6 @@ def write_gpio(device_path, data):
     
     return {}
 
-path_config_devices = pathlib.Path('./config/devices.yaml')
-# path_config_protocols = pathlib.Path('./config/protocols.yaml')
-
-config = {
-    "devices": path_config_devices,
-    # "protocols": path_config_protocols
-}
 
 def bind_devices(config_devices):
     logger.info(f'bind_devices {json.dumps(config_devices)}')
@@ -259,7 +252,7 @@ def bind_devices(config_devices):
             
     return system_devices
 
-config_devices = load_yaml(config['devices'])['devices']
-# config_protocols = load_yaml(config['protocols'])['protocols']
-    
-system_devices = bind_devices(config_devices)
+# from system import load_config
+# system_devices = bind_devices(config_devices)
+
+system_devices = {}
