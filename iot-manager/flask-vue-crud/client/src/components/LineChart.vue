@@ -1,85 +1,256 @@
 <template>
-    <div id="chart" class="root"></div>
+    <div :id="chartId" class="chart-container">
+        <div v-if="loading" class="loading">Loading data...</div>
+        <div v-if="error" class="error">{{ error }}</div>
+    </div>
 </template>
 
 <script lang="ts" setup>
-import { onMounted, watch } from 'vue';
+import { onMounted, ref, watch, computed } from 'vue';
 import * as d3 from "d3";
-// import * as d3 from 'd3'; (disabled due to vitepress)
 
-const props = defineProps<{
-    viewportStart: number;
-    viewportEnd: number;
-    data: { start: number; value: number; }[];
-}>();
+const props = defineProps({
+    chartId: {
+        type: String,
+        default: 'temperature-chart'
+    },
+    title: {
+        type: String,
+        default: 'Temperature Data'
+    },
+    color: {
+        type: String,
+        default: '#ff7f0e'  // Orange color for temperature
+    },
+    data: {
+        type: Array,
+        default: () => []
+    },
+    timeRange: {
+        type: Object,
+        default: () => ({
+            start: null,
+            end: null
+        })
+    },
+    yAxisLabel: {
+        type: String,
+        default: 'Temperature (°C)'
+    },
+    height: {
+        type: Number,
+        default: 400
+    }
+});
 
-function initChart(start: number, end: number, data: typeof props.data) {
-    // console.log(d3)
-    // if (!window.d3) {
-    //     // ensure d3 is loaded (due to import within vitepress)
-    //     setTimeout(() => initChart(start, end, data), 100);
-    //     return;
-    // };
+const loading = ref(false);
+const error = ref(null);
 
-    const chart = document.getElementById('chart');
-    // console.log(chart)
-    if (!chart) return;
+// Calculate min/max values for auto-scaling
+const yDomain = computed(() => {
+    if (!props.data || props.data.length === 0) return [0, 30];  // Default range
+    
+    const values = props.data.map(d => d.value);
+    const min = Math.floor(Math.min(...values) - 2);  // Pad min by 2 degrees
+    const max = Math.ceil(Math.max(...values) + 2);   // Pad max by 2 degrees
+    
+    return [min, max];
+});
 
-    d3.select('#chart').selectAll('svg').remove();
+// Calculate time domain for x-axis
+const xDomain = computed(() => {
+    if (props.timeRange.start && props.timeRange.end) {
+        return [props.timeRange.start, props.timeRange.end];
+    }
+    
+    if (!props.data || props.data.length === 0) {
+        // Default to last 7 days if no data
+        const end = new Date();
+        const start = new Date();
+        start.setDate(start.getDate() - 7);
+        return [start.getTime(), end.getTime()];
+    }
+    
+    // Use data range with small padding
+    const timestamps = props.data.map(d => d.timestamp);
+    const start = Math.min(...timestamps);
+    const end = Math.max(...timestamps);
+    const padding = (end - start) * 0.05;  // 5% padding on each side
+    
+    return [start - padding, end + padding];
+});
 
-    const margin = { top: 2, right: 0, bottom: 2, left: 0 };
-    const width = chart.clientWidth - margin.left - margin.right;
-    const height = 32 - margin.top - margin.bottom;
-
-    const svg = d3.select('#chart')
+function renderChart() {
+    if (!props.data || props.data.length === 0) return;
+    
+    // Clear previous chart
+    const chartContainer = document.getElementById(props.chartId);
+    if (!chartContainer) return;
+    
+    d3.select(`#${props.chartId}`).selectAll('*').remove();
+    
+    // Set up dimensions
+    const margin = { top: 40, right: 30, bottom: 50, left: 60 };
+    const width = chartContainer.clientWidth - margin.left - margin.right;
+    const height = props.height - margin.top - margin.bottom;
+    
+    // Create SVG
+    const svg = d3.select(`#${props.chartId}`)
         .append('svg')
         .attr('width', width + margin.left + margin.right)
         .attr('height', height + margin.top + margin.bottom)
         .append('g')
         .attr('transform', `translate(${margin.left},${margin.top})`);
-
-    const x = d3.scaleLinear().domain([start, end]).range([0, width]);
-    const y = d3.scaleLinear().domain([0, 1]).range([height, 0]);
-
+    
+    // Set up scales
+    const x = d3.scaleTime()
+        .domain(xDomain.value)
+        .range([0, width]);
+    
+    const y = d3.scaleLinear()
+        .domain(yDomain.value)
+        .range([height, 0]);
+    
+    // Create axes
+    const xAxis = d3.axisBottom(x)
+        .tickFormat(d3.timeFormat('%b %d, %H:%M'))
+        .ticks(width > 500 ? 10 : 5);
+    
+    const yAxis = d3.axisLeft(y)
+        .ticks(height > 300 ? 10 : 5);
+    
+    // Add axes to chart
+    svg.append('g')
+        .attr('class', 'x-axis')
+        .attr('transform', `translate(0,${height})`)
+        .call(xAxis)
+        .selectAll('text')
+        .style('text-anchor', 'end')
+        .attr('dx', '-.8em')
+        .attr('dy', '.15em')
+        .attr('transform', 'rotate(-45)');
+    
+    svg.append('g')
+        .attr('class', 'y-axis')
+        .call(yAxis);
+    
+    // Add y-axis label
+    svg.append('text')
+        .attr('transform', 'rotate(-90)')
+        .attr('y', 0 - margin.left)
+        .attr('x', 0 - (height / 2))
+        .attr('dy', '1em')
+        .style('text-anchor', 'middle')
+        .text(props.yAxisLabel);
+    
+    // Add title
+    svg.append('text')
+        .attr('x', width / 2)
+        .attr('y', 0 - (margin.top / 2))
+        .attr('text-anchor', 'middle')
+        .style('font-size', '16px')
+        .text(props.title);
+    
+    // Create line generator
     const line = d3.line()
-        .x(d => x(d.start))
-        .y(d => y(d.value));
-
+        .x(d => x(d.timestamp))
+        .y(d => y(d.value))
+        .curve(d3.curveMonotoneX);  // Smooth curve
+    
+    // Add line path
     svg.append('path')
-        .datum(data)
+        .datum(props.data)
         .attr('class', 'line')
-        .attr('d', line);
-
-    const p = d3.selectAll("path");
-    // p.attr("class", "graf");
-    p.style("stroke", "red");
-    p.style("stroke-width", 2.5);
-    p.style("fill", "none");
-
+        .attr('d', line)
+        .style('fill', 'none')
+        .style('stroke', props.color)
+        .style('stroke-width', '2px');
+    
+    // Add data points
+    svg.selectAll('.dot')
+        .data(props.data)
+        .enter()
+        .append('circle')
+        .attr('class', 'dot')
+        .attr('cx', d => x(d.timestamp))
+        .attr('cy', d => y(d.value))
+        .attr('r', 4)
+        .style('fill', props.color)
+        .style('opacity', 0.7)
+        .on('mouseover', function(event, d) {
+            // Create tooltip on hover
+            d3.select(this).attr('r', 6).style('opacity', 1);
+            
+            const date = new Date(d.timestamp);
+            const formattedDate = date.toLocaleString();
+            
+            svg.append('text')
+                .attr('id', 'tooltip')
+                .attr('x', x(d.timestamp) + 10)
+                .attr('y', y(d.value) - 10)
+                .style('font-size', '12px')
+                .text(`${d.value.toFixed(1)}°C at ${formattedDate}`);
+        })
+        .on('mouseout', function() {
+            // Remove tooltip on mouseout
+            d3.select(this).attr('r', 4).style('opacity', 0.7);
+            d3.select('#tooltip').remove();
+        });
 }
 
-// Re-render chart when viewport changes:
-watch(() => [props.viewportStart, props.viewportEnd],
-    () => initChart(props.viewportStart, props.viewportEnd, props.data)
+// Watch for changes in data or dimensions to redraw chart
+watch(() => [props.data, chartId.value, width.value, height.value, xDomain.value, yDomain.value], 
+    () => renderChart(),
+    { deep: true }
 );
 
+// Watch for container size changes
 onMounted(() => {
-    console.log('onMounted')
-    initChart(props.viewportStart, props.viewportEnd, props.data);
+    renderChart();
+    
+    // Add window resize handler
+    window.addEventListener('resize', renderChart);
+    
+    // Clean up event listener
+    return () => {
+        window.removeEventListener('resize', renderChart);
+    };
 });
 </script>
 
 <style lang="scss" scoped>
-.root {
+.chart-container {
     width: 100%;
     height: 100%;
-    position: absolute;
-    inset: 0;
+    position: relative;
 }
 
-path {
+.loading, .error {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    font-size: 14px;
+}
+
+.error {
+    color: red;
+}
+
+:deep(.line) {
     fill: none;
-    stroke: var(--bs-red);
     stroke-width: 2px;
+}
+
+:deep(.x-axis), :deep(.y-axis) {
+    font-size: 12px;
+}
+
+:deep(.x-axis path), :deep(.y-axis path) {
+    stroke: #aaa;
+}
+
+:deep(.x-axis line), :deep(.y-axis line) {
+    stroke: #ddd;
 }
 </style>
