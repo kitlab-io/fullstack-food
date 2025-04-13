@@ -46,10 +46,12 @@ def get_start_stop_times(protocol_task):
     stop_time = None
     
     start = protocol_task['start_time']
-    duration = protocol_task['duration']
     
     start_time = [start['h'], start['m'], start['s']]
-    stop_time = [start['h']+duration['h'], start['m']+duration['m'], start['s']+duration['s']]
+    
+    if 'duration' in protocol_task:
+        duration = protocol_task['duration']    
+        stop_time = [start['h']+duration['h'], start['m']+duration['m'], start['s']+duration['s']]
     
     return start_time, stop_time
 

@@ -1,18 +1,28 @@
 devices: 
-  cameras:
+
+  sensors:
     - 
-      type: usb_cam
+      id: 1
+      type: usb_camera
       fov: 130
       model: ov5640
       data_mp: 5
       res_width: 2592
       res_height: 1944
       usb_device_path: 
-    
-  sensors:
     - 
+      id: 1
       model: bme280
       type: air_temp_humidity_barometer
+      values:
+        temp
+        humidity
+        pressure
+        altitude
+    - 
+      id: 1
+      model: dht210
+      type: air_temp_humidity
       values:
         temp
         humidity
@@ -24,9 +34,10 @@ devices:
       values:
         temp
     - 
+      type: soil_mositure
+      subtype: capacitive
       model: capacitive
       vendor: 
-      type: soil_mositure
       values:
         moisture
     - 
@@ -39,7 +50,8 @@ devices:
         light_fullspectrum
     - 
       model: hcrs04
-      type: ultrasonic
+      type: water_level
+      subtype: ultrasonic
       values:
         distance # water level
 
@@ -70,4 +82,44 @@ devices:
       voltage: 12
 
     
-  
+placements:
+  zones:
+    - 
+      id: 1
+      devices:
+        acuators:
+          - 
+            type: light_cwww
+            id: 1
+          - 
+            type: water_pump
+            id: 1
+          - 
+            type: fan
+            id: 1
+          - 
+            type: heat_element
+            id: 1
+
+        sensors:
+          - 
+            type: usb_camera
+            id: 1
+          - 
+            type: light
+            id: 1
+          - 
+            type: water_level
+            id: 1
+          - 
+            type: soil_temp
+            id: 1
+          - 
+            type: soil_moisture
+            id: 1
+          - 
+            type: air_temp_humidity_barometer
+            id: 1
+          - 
+            type: air_temp_humidity
+            id: 1

@@ -5,8 +5,10 @@ from rq.repeat import Repeat
 
 from datetime import timedelta, datetime
 
-from devices import system_devices
+from devices import system_devices, Sensor
 from utils import logger
+
+from datastore import add_sensor_reading
 
 # rq worker --with-scheduler
 
@@ -37,10 +39,54 @@ def job_lights_on(target):
 def job_lights_off(target):
     logger.info(f'job_lights_off {target}')
 
-    
-    light = system_devices['light_cwww'][0]
+    light = system_devices['actuators']['light_cwww'][0]
     light.off()
     
+    return target
+
+def job_camera_photo(target):
+    logger.info(f'job_camera_photo {target}')
+    camera = system_devices['sensors']['camera'][0]
+    camera.photo()
+    
+    return target
+
+def job_read_sensor(target:Sensor):
+    logger.info(f'job_read_sensor {target}')
+    
+    target.measure()
+    add_sensor_reading(target.last_reading)
+    
+    return target
+
+def job_read_sensors(target):
+    logger.info(f'job_read_sensors {target}')
+    
+    # for each available sensor
+    if len(system_devices['sensors']['water_level']) > 0:
+        sensor = system_devices['sensors']['water_level'][0]
+        job_read_sensor(sensor)
+        
+    if len(system_devices['sensors']['soil_moisture']) > 0:
+        sensor = system_devices['sensors']['soil_moisture'][0]
+        job_read_sensor(sensor)
+    
+    if len(system_devices['sensors']['soil_temp']) > 0:
+        sensor = system_devices['sensors']['soil_temp'][0]
+        job_read_sensor(sensor)
+        
+    if len(system_devices['sensors']['air_temp_humidity']) > 0:
+        sensor = system_devices['sensors']['air_temp_humidity'][0]
+        job_read_sensor(sensor)
+        
+    if len(system_devices['sensors']['air_temp_humidity_barometer']) > 0:
+        sensor = system_devices['sensors']['air_temp_humidity_barometer'][0]
+        job_read_sensor(sensor)
+
+    if len(system_devices['sensors']['light_fullspectrum']) > 0:
+        sensor = system_devices['sensors']['light_fullspectrum'][0]
+        job_read_sensor(sensor)
+        
     return target
 
 def job_pump_on(target):
@@ -56,10 +102,6 @@ def job_heat_on(target):
     return target
 
 def job_heat_off(target):
-    logger.info(target)
-    return target
-
-def job_take_photo(target):
     logger.info(target)
     return target
 
