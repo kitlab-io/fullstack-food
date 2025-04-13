@@ -150,7 +150,7 @@ def get_sensor_data():
         for row in cursor.fetchall():
             try:
                 raw_data = json.loads(row['raw_data'])
-                timestamp = datetime.datetime.fromisoformat(row['created_at']).timestamp() * 1000
+                timestamp = int(datetime.datetime.fromisoformat(row['created_at']).timestamp() * 1000)
                 
                 # Extract the temperature value from raw_data
                 if sensor_type == 'soil_temp' and 'temp_c' in raw_data:
@@ -179,6 +179,8 @@ def get_sensor_data():
         
         response_object['data'] = data_points
         response_object['sensor_type'] = sensor_type
+        
+        print(data_points)
         
     except Exception as e:
         logger.error(f"Error fetching sensor data: {e}")
