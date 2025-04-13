@@ -40,6 +40,11 @@ const props = defineProps({
     height: {
         type: Number,
         default: 400
+    },
+    timeFormat: {
+        type: String,
+        default: 'auto',  // 'auto', 'days', 'hours', 'minutes', 'seconds'
+        validator: (value) => ['auto', 'days', 'hours', 'minutes', 'seconds'].includes(value)
     }
 });
 
@@ -112,9 +117,69 @@ function renderChart() {
         .range([height, 0]);
     
     // Create axes
+    const getTimeFormat = () => {
+        // If auto mode, determine format based on time range
+        if (props.timeFormat === 'auto') {
+            const range = xDomain.value[1] - xDomain.value[0]; // time range in milliseconds
+            
+            // Less than 10 minutes
+            if (range < 10 * 60 * 1000) {
+                return d3.timeFormat('%H:%M:%S'); // Hours:Minutes:Seconds
+            } 
+            // Less than 3 hours
+            else if (range < 3 * 60 * 60 * 1000) {
+                return d3.timeFormat('%H:%M:%S'); // Hours:Minutes:Seconds 
+            } 
+            // Less than 2 days
+            else if (range < 2 * 24 * 60 * 60 * 1000) {
+                return d3.timeFormat('%H:%M'); // Hours:Minutes
+            } 
+            // Less than 30 days
+            else if (range < 30 * 24 * 60 * 60 * 1000) {
+                return d3.timeFormat('%b %d, %H:%M'); // Month Day, Hours:Minutes
+            } 
+            // More than 30 days
+            else {
+                return d3.timeFormat('%b %d'); // Month Day
+            }
+        } 
+        
+        // Explicit formats
+        switch (props.timeFormat) {
+            case 'days':
+                return d3.timeFormat('%b %d');
+            case 'hours':
+                return d3.timeFormat('%b %d, %H:%M');
+            case 'minutes':
+                return d3.timeFormat('%H:%M');
+            case 'seconds':
+                return d3.timeFormat('%H:%M:%S');
+            default:
+                return d3.timeFormat('%b %d, %H:%M');
+        }
+    };
+    
+    const getTickCount = () => {
+        // Base tick count based on width
+        const baseTicks = width > 500 ? 10 : 5;
+        
+        // Adjust based on timeFormat
+        if (props.timeFormat === 'seconds') {
+            return baseTicks * 1.5; // More ticks for seconds
+        } else if (props.timeFormat === 'minutes') {
+            return baseTicks * 1.2; // Slightly more for minutes
+        } else if (props.timeFormat === 'days') {
+            return baseTicks * 0.7; // Fewer for days to avoid crowding
+        } else {
+            return baseTicks;
+        }
+    };
+    
+    const timeFormat = getTimeFormat();
+    
     const xAxis = d3.axisBottom(x)
-        .tickFormat(d3.timeFormat('%b %d, %H:%M'))
-        .ticks(width > 500 ? 10 : 5);
+        .tickFormat(timeFormat)
+        .ticks(getTickCount());
     
     const yAxis = d3.axisLeft(y)
         .ticks(height > 300 ? 10 : 5);
@@ -182,14 +247,28 @@ function renderChart() {
             d3.select(this).attr('r', 6).style('opacity', 1);
             
             const date = new Date(d.timestamp);
-            const formattedDate = date.toLocaleString();
+            
+            // Format the date based on the current time format setting
+            let dateDisplay;
+            if (props.timeFormat === 'seconds') {
+                dateDisplay = date.toLocaleTimeString();
+            } else if (props.timeFormat === 'minutes') {
+                dateDisplay = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+            } else if (props.timeFormat === 'hours') {
+                dateDisplay = date.toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+            } else if (props.timeFormat === 'days') {
+                dateDisplay = date.toLocaleDateString([], { month: 'short', day: 'numeric' });
+            } else {
+                // For 'auto' format, provide a comprehensive date time format
+                dateDisplay = date.toLocaleString();
+            }
             
             svg.append('text')
                 .attr('id', 'tooltip')
                 .attr('x', x(d.timestamp) + 10)
                 .attr('y', y(d.value) - 10)
                 .style('font-size', '12px')
-                .text(`${d.value.toFixed(1)}°C at ${formattedDate}`);
+                .text(`${d.value.toFixed(1)}°C at ${dateDisplay}`);
         })
         .on('mouseout', function() {
             // Remove tooltip on mouseout

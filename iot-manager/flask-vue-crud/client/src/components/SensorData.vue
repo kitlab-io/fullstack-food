@@ -28,6 +28,7 @@ const sensorColors = {
 
 // Time range options
 const timeRangeOptions = [
+  { value: 0.042, label: 'Last 1 Hour' },
   { value: 1, label: 'Last 24 Hours' },
   { value: 7, label: 'Last 7 Days' },
   { value: 30, label: 'Last 30 Days' }
@@ -36,7 +37,15 @@ const timeRangeOptions = [
 // Computed values for chart
 const chartTitle = computed(() => {
   const sensorLabel = sensorTypes.find(t => t.value === selectedSensorType.value)?.label || 'Temperature';
-  return `${sensorLabel} Readings - Last ${timeRange.value} ${timeRange.value === 1 ? 'Day' : 'Days'}`;
+  let timeLabel;
+  if (timeRange.value < 1) {
+    timeLabel = 'Hour';
+  } else if (timeRange.value === 1) {
+    timeLabel = 'Day';
+  } else {
+    timeLabel = 'Days';
+  }
+  return `${sensorLabel} Readings - Last ${timeRange.value < 1 ? '1' : timeRange.value} ${timeLabel}`;
 });
 
 const chartColor = computed(() => {
@@ -113,12 +122,33 @@ const timelineItems = computed(() => {
 const visibleTimeRange = computed(() => {
   const now = new Date();
   const start = new Date();
-  start.setDate(start.getDate() - timeRange.value);
+  
+  if (timeRange.value < 1) {
+    // For hourly view (e.g., 0.042 for 1 hour = 1/24 days)
+    const hours = Math.round(timeRange.value * 24);
+    start.setHours(start.getHours() - hours);
+  } else {
+    // For daily views
+    start.setDate(start.getDate() - timeRange.value);
+  }
   
   return {
     start: start.getTime(),
     end: now.getTime()
   };
+});
+
+// Determine the appropriate time format based on the time range
+const timeFormat = computed(() => {
+  if (timeRange.value < 0.1) {  // Less than 2.4 hours
+    return 'minutes';
+  } else if (timeRange.value < 1) { // Less than 1 day
+    return 'hours';
+  } else if (timeRange.value <= 7) { // 1-7 days
+    return 'hours';
+  } else {
+    return 'days';
+  }
 });
 
 // Fetch data on component mount
@@ -176,6 +206,7 @@ onMounted(() => {
           :timeRange="visibleTimeRange"
           :yAxisLabel="'Temperature (°C)'"
           :height="400"
+          :timeFormat="timeFormat"
         />
       </div>
     </div>

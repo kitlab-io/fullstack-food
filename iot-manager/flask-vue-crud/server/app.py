@@ -115,11 +115,18 @@ def get_sensor_data():
     try:
         # Get query parameters for filtering
         sensor_type = request.args.get('type', 'soil_temp')
-        days = int(request.args.get('days', 7))
+        days = float(request.args.get('days', 7))
         
         # Calculate date range
         end_date = datetime.datetime.now()
-        start_date = end_date - datetime.timedelta(days=days)
+        
+        # Handle both days and hours (days < 1 means hours)
+        if days < 1:
+            # Convert to hours (e.g., 0.042 days ≈ 1 hour)
+            hours = round(days * 24)
+            start_date = end_date - datetime.timedelta(hours=hours)
+        else:
+            start_date = end_date - datetime.timedelta(days=days)
         
         # Connect to the database
         db_path = Path(base_dir) / 'data' / 'sensordata.db'
