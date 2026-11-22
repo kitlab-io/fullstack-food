@@ -591,12 +591,19 @@ class Hub:
                inputs: dict, now: datetime) -> None:
         """Record why a loop is doing what it is doing.
 
-        A row is stored only when the decision changes (want, action or reason), so reasons
-        must not contain values that move every tick; those go in `inputs`.
+        A row is stored only when the decision changes (want, action or reason) or what it
+        is measured against does (a target, say, after an override). Reasons must not contain
+        values that move every tick; the reading goes in `inputs["value"]`, which is ignored
+        when looking for a change.
         """
         key = (zone_id, loop_id, dev.id)
         last = self.decisions.get(key)
-        changed = last is None or (last["want"], last["action"], last["reason"]) != (want, action, reason)
+
+        def fixed(values: dict) -> dict:
+            return {k: v for k, v in values.items() if k != "value"}
+
+        changed = (last is None or (last["want"], last["action"], last["reason"]) != (want, action, reason)
+                   or fixed(last["inputs"]) != fixed(inputs))
         self.decisions[key] = {"t": last["t"] if last and not changed else now, "want": want, "action": action,
                                "reason": reason, "inputs": inputs}
         if changed:

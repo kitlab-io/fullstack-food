@@ -4,7 +4,16 @@ name: "12 V fan, 50 mm"
 implements: [actuator.fan]
 interface: { bus: pwm, supply_v: [12, 12], switched_by: mosfet }
 drivers:
-  - { runtime: esphome, platform: speed fan, status: untested }
+  - runtime: esphome
+    platform: ledc output
+    status: untested
+    control: { type: level, outputs: [pwm] }
+    template: |
+      output:
+        - platform: ledc
+          pin: ${pin.pwm}
+          id: ${id}_pwm
+          frequency: 25000Hz
   - { runtime: sim, status: verified }
 # Pins, wiring, power and bench values below are from general experience with this part.
 # Confirm them against the datasheet and on the bench, then set datasheet_checked: true.

@@ -29,5 +29,22 @@ services:
       broker:
         condition: service_healthy
 
+  # Read-only dashboard on http://localhost:8080. It has no login yet, so it is published on
+  # this machine only; change the port mapping to reach it from the rest of the network.
+  web:
+    build:
+      context: ../..
+      dockerfile: deploy/Dockerfile
+    restart: unless-stopped
+    command: ["python", "-m", "fsf_web", "--site", "sites/examples/${FSF_SITE:-houseplants}",
+              "--mqtt-host", "broker", "--db", "/data/hub.db", "--host", "0.0.0.0"]
+    volumes:
+      - hub-data:/data        # the service opens the database read-only
+    ports:
+      - "127.0.0.1:8080:8080"
+    depends_on:
+      broker:
+        condition: service_healthy
+
 volumes:
   hub-data:

@@ -14,7 +14,7 @@ Any machine with Python 3.12:
 ```bash
 pip install -e . pytest
 python -m fsf_core validate     # check the catalog and the example sites
-pytest                          # simulate weeks of growing in about 30 seconds
+pytest                          # simulate weeks of growing in a couple of minutes
 ```
 
 With Docker, a simulated site runs against a real MQTT broker:
@@ -24,7 +24,8 @@ FSF_SITE=mushrooms FSF_SPEED=600 docker compose -f deploy/compose/base.yaml -f d
 ```
 
 `FSF_SITE` is `houseplants`, `microgreens` or `mushrooms`. `FSF_SPEED` is simulated seconds
-per real second. The hub log prints each zone status change. To watch the MQTT traffic:
+per real second. The dashboard is at http://localhost:8080 (read-only: zones, charts, devices).
+The hub log prints each zone status change. To watch the MQTT traffic:
 
 ```bash
 docker compose -f deploy/compose/base.yaml -f deploy/compose/mock.yaml exec broker mosquitto_sub -t 'fsf/#' -v
@@ -33,8 +34,23 @@ docker compose -f deploy/compose/base.yaml -f deploy/compose/mock.yaml exec brok
 To move a planting to its next stage (for example mushrooms from incubation to fruiting):
 
 ```bash
-docker compose -f deploy/compose/base.yaml -f deploy/compose/mock.yaml exec broker mosquitto_pub -t fsf/mushrooms/hub/cmd -m '{"name":"advance_stage","planting":"oyster-1"}'
+docker compose -f deploy/compose/base.yaml -f deploy/compose/mock.yaml exec broker mosquitto_pub -t fsf/mushrooms/hub/cmd -m '{"id":"a1","name":"advance_stage","planting":"oyster-1"}'
 ```
+
+## Towards real hardware
+
+Nothing below has been run on a board yet.
+
+```bash
+fsf validate --pins sites/local/my-site          # check pin assignments, propose pins for blanks
+fsf firmware build sites/local/my-site           # one ESPHome config per node in build/firmware/<site>/
+fsf firmware flash sites/local/my-site shelf-node    # needs `pip install esphome` and a filled-in secrets.yaml
+fsf node test shelf-node --site sites/local/my-site --mqtt-host <broker> --actuate
+```
+
+`fsf node test` runs the same contract checks the simulated nodes pass: payloads match
+`schemas/mqtt/`, an on-command ends by itself, `off` is honoured. With `--actuate` it switches
+every actuator on the node for a few seconds.
 
 ## What the scenario tests cover
 

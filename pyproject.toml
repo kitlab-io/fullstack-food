@@ -6,22 +6,29 @@ readme = "README.md"
 requires-python = ">=3.12"
 dependencies = ["pyyaml>=6", "jsonschema>=4.18", "paho-mqtt>=2"]
 
+[project.optional-dependencies]
+web = ["fastapi>=0.115", "uvicorn>=0.30"]      # the dashboard service
+firmware = ["esphome>=2025.2"]                  # only needed to flash nodes
+
+[project.scripts]
+fsf = "fsf_core.__main__:main"
+
 [dependency-groups]
-dev = ["ruff>=0.11", "pytest>=8"]
+dev = ["ruff>=0.11", "pytest>=8", "fastapi>=0.115", "httpx>=0.27"]
 
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build]
-dev-mode-dirs = ["packages/core", "packages/hub", "packages/sim"]
+dev-mode-dirs = ["packages/core", "packages/hub", "packages/sim", "packages/web"]
 
 [tool.hatch.build.targets.wheel]
-packages = ["packages/core/fsf_core", "packages/hub/fsf_hub", "packages/sim/fsf_sim"]
+packages = ["packages/core/fsf_core", "packages/hub/fsf_hub", "packages/sim/fsf_sim", "packages/web/fsf_web"]
 
 [tool.ruff]
 target-version = "py312"
-extend-exclude = ["iot-manager/flask-vue-crud/client"]
+extend-exclude = ["iot-manager/flask-vue-crud/client", "packages/web/frontend"]
 
 [tool.ruff.lint]
 # Correctness only for now: syntax errors, undefined names, broken comparisons.
@@ -34,4 +41,4 @@ select = ["E9", "F63", "F7", "F82"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-pythonpath = ["packages/core", "packages/hub", "packages/sim"]
+pythonpath = ["packages/core", "packages/hub", "packages/sim", "packages/web"]

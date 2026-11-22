@@ -28,6 +28,22 @@ mock-down:
 mock-watch:
     {{compose}} exec broker mosquitto_sub -t 'fsf/#' -v
 
+# Write one ESPHome config per node into build/firmware/<site>: just firmware sites/local/my-site
+firmware site *args:
+    uv run fsf firmware build {{site}} {{args}}
+
+# Run the node contract suite against a broker: just node-test shelf-node --site sites/local/my-site --actuate
+node-test node *args:
+    uv run fsf node test {{node}} {{args}}
+
+# Build the dashboard frontend into packages/web/frontend/dist (needs Node.js)
+web-build:
+    cd packages/web/frontend && npm ci && npm run build
+
+# Serve the dashboard for a site: just web sites/examples/houseplants --db hub.db
+web site *args:
+    uv run python -m fsf_web --site {{site}} {{args}}
+
 # Scan the working tree for secrets (needs gitleaks installed)
 secrets-scan:
     gitleaks dir .

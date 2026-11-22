@@ -1,7 +1,7 @@
 # Installation, assembly, testing and troubleshooting plan
 
-Status (2026-11-22): the recommended options in section 9 are accepted. Phase I1 is built;
-I2 to I6 are not started. Today the system runs only against simulated nodes; this plan is
+Status (2026-11-22): the recommended options in section 9 are accepted. Phase I1 is built,
+and so is the software half of I2; the hardware half of I2 and I3 to I6 are not started. Today the system runs only against simulated nodes; this plan is
 the path from that to a working physical installation that someone else can replicate.
 
 How I1 stands:
@@ -12,12 +12,34 @@ How I1 stands:
 - `esp32-c3-devkitm` has a pin map (also `datasheet_checked: false`). A site's `pins` are
   checked against it; `just validate --pins` proposes pins for blanks. Strapping, USB and
   serial pins are marked `caution`: accepted with a warning, never proposed.
-- Finding: with that pin map the house plant and microgreens builds need nine GPIOs and the
-  board has eight without a caution, so the LED strip gets no proposal. The first hardware
-  build needs a decision: a board with more pins, an I2C ADC for the soil probes, or the
-  strip on a caution pin.
+- With that pin map the house plant and microgreens builds needed nine GPIOs where the
+  board has eight without a caution. Decided: soil probes go on an ADS1115 I2C ADC
+  (`pins: { adc: soil-adc/A0 }`). All three example sites now have every pin assigned.
 - Not done from section 3: the other four boards have no pin map, and I2C address clashes
   are not checked.
+
+How I2 stands:
+
+- `fsf firmware build <site>` writes one ESPHome config per node, the shared `fsf_node.h`
+  and `secrets.example.yaml` into `build/firmware/<site>/`. Device blocks come from the
+  models' ESPHome templates; the generator adds status as birth and last will, a state
+  message per device every 60 s, and per actuator a command handler whose on-command starts
+  a lease script that switches off by itself (capped at one hour), with everything off
+  after a reboot. `fsf firmware flash` wraps `esphome run`.
+- All four example nodes pass `esphome config` (ESPHome 2026.11.0). Nothing has been
+  compiled, so the C++ in `fsf_node.h` and in the lambdas is unproven, and nothing has been
+  flashed. The I2 done-when (a real node passes the contract suite) is still open.
+- `fsf node test <node>` is the contract suite: online status, sensor reports, payload
+  schemas, and with `--actuate` lease expiry, off, refusal of on without a duration and of
+  unknown commands, LED render; `--last-will` asks for the plug to be pulled. The simulated
+  nodes of all three sites pass it in the test suite.
+- Mains loads (heat mat, humidifier) are left out of the firmware with a warning, as
+  decision 2 says. Until a smart-plug driver exists the hub cannot switch them on real
+  hardware, so the mushroom build cannot run for real yet.
+- Calibration values in the example sites are examples, not measurements.
+- Not done: the CircuitPython reference client, a browser flasher, release binaries.
+- Noticed on the way: when the reservoir sensor is silent the hub does not block the pumps
+  (no reading is treated as not low). On hardware that should probably fail safe.
 
 Hardware facts quoted below (pull-up values, voltage levels, sensor quirks) are from general
 experience with these parts. Each must be confirmed against the part's datasheet and on the

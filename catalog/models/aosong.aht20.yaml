@@ -4,7 +4,16 @@ name: "Aosong AHT20"
 implements: [sensor.air_temp_humidity]
 interface: { bus: i2c, addresses: [0x38], supply_v: [2.0, 5.5] }
 drivers:
-  - { runtime: esphome, platform: aht10, status: untested }
+  - runtime: esphome
+    platform: aht10
+    status: untested
+    template: |
+      sensor:
+        - platform: aht10
+          variant: AHT20
+          update_interval: 30s
+          temperature: { id: ${id}_air_temperature, internal: true }
+          humidity: { id: ${id}_relative_humidity, internal: true }
   - { runtime: linux, module: adafruit_ahtx0, status: bench }
   - { runtime: sim, status: verified }
 # Pins, wiring, power and bench values below are from general experience with this part.

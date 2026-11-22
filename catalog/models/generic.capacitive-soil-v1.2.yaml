@@ -4,7 +4,29 @@ name: "Capacitive soil moisture sensor v1.2"
 implements: [sensor.soil_moisture]
 interface: { bus: adc, supply_v: [3.3, 5.5] }
 drivers:
-  - { runtime: esphome, platform: adc, status: untested }
+  - runtime: esphome
+    platform: adc
+    status: untested
+    signal_templates:
+      adc: |
+        sensor:
+          - platform: adc
+            pin: ${pin.adc}
+            attenuation: 12db
+            update_interval: 30s
+            id: ${id}_raw
+            internal: true
+    template: |
+      sensor:
+        - platform: copy
+          source_id: ${id}_raw
+          id: ${id}_soil_moisture
+          internal: true
+          filters:
+            - calibrate_linear:
+                - ${cal.dry_v} -> 0.0
+                - ${cal.wet_v} -> 100.0
+            - clamp: { min_value: 0, max_value: 100 }
   - { runtime: linux, module: adafruit_ads1x15, status: bench, requires: ti.ads1115 }
   - { runtime: sim, status: verified }
 # Pins, wiring, power and bench values below are from general experience with this part.
@@ -15,8 +37,8 @@ pins:
 power: { rail: 3v3, typical_ma: 5, peak_ma: 5 }
 calibration:
   procedure: soil_dry_wet
-  produces: [dry, wet]
-  notes: "Per probe: one reading in dry air, one in water up to the line. Readings drift with temperature and fertiliser, so repeat when they look off."
+  produces: [dry_v, wet_v]
+  notes: "Volts at the probe output. Per probe: one reading in dry air, one in water up to the line. Readings drift with temperature and fertiliser, so repeat when they look off."
 bench_test:
   settle_s: 5
   plausible: { soil_moisture: [0, 100] }

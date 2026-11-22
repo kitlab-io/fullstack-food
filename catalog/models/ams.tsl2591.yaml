@@ -4,7 +4,14 @@ name: "ams TSL2591"
 implements: [sensor.light]
 interface: { bus: i2c, addresses: [0x29], supply_v: [3.3, 5.0] }
 drivers:
-  - { runtime: esphome, platform: tsl2591, status: untested }
+  - runtime: esphome
+    platform: tsl2591
+    status: untested
+    template: |
+      sensor:
+        - platform: tsl2591
+          update_interval: 30s
+          calculated_lux: { id: ${id}_illuminance, internal: true }
   - { runtime: linux, module: adafruit_tsl2591, status: bench }
   - { runtime: sim, status: verified }
 # Pins, wiring, power and bench values below are from general experience with this part.

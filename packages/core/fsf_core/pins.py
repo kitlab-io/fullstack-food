@@ -2,6 +2,8 @@
 
 A model lists the signals it needs (`pins` in catalog/models/), a board lists what each of
 its pins can do (`pins` in catalog/boards/). Boards without a pin map are not checked.
+A part such as an I2C ADC can list channels it `provides`; a signal is put on one by
+writing `<device id>/<channel>` (for example `soil-adc/A0`) instead of a board pin.
 Pins marked `caution` on the board (strapping pins, pins shared with USB or the serial
 bridge) are accepted with a warning when a person assigns them, and never proposed.
 """
@@ -43,6 +45,9 @@ def check_node(node_id: str, board: dict, devices: list) -> PinReport:
     if "pins" not in board:
         return report
     used: dict[str, tuple[str, str, str]] = {}      # pin -> (need, device, signal)
+    # Channels other devices on this node provide, e.g. {"soil-adc/A0": "adc"}.
+    channels = {f"{d.id}/{ch}": need for d in devices
+                for need, names in d.model.get("provides", {}).items() for ch in names}
     blank: list[tuple[object, dict]] = []
     wrong: list[tuple[object, dict, str]] = []
 
@@ -59,31 +64,39 @@ def check_node(node_id: str, board: dict, devices: list) -> PinReport:
                 blank.append((dev, spec))
                 continue
             need = spec["needs"]
-            if pin not in board["pins"]:
+            if "/" in pin:
+                if pin not in channels:
+                    wrong.append((dev, spec, f"node {node_id} has no channel {pin}"))
+                    continue
+                if channels[pin] != need:
+                    wrong.append((dev, spec, f"{pin} provides {channels[pin]}, not {need}"))
+                    continue
+            elif pin not in board["pins"]:
                 wrong.append((dev, spec, f"board {board['id']} has no pin {pin}"))
                 continue
-            reason = unfit(board, pin, need)
-            if reason:
-                wrong.append((dev, spec, f"{pin} {reason}"))
+            elif unfit(board, pin, need):
+                wrong.append((dev, spec, f"{pin} {unfit(board, pin, need)}"))
                 continue
             other = used.get(pin)
             if other and not (need in SHARED and other[0] == need):
                 wrong.append((dev, spec, f"{pin} is already used by {other[1]} ({other[2]})"))
                 continue
             used[pin] = (need, dev.id, signal)
-            caution = board["pins"][pin].get("caution")
+            caution = board["pins"].get(pin, {}).get("caution")
             if caution:
                 report.warnings.append(f"device {dev.id}: {signal} on {pin}: {caution}")
 
     def free_for(need: str) -> list[str]:
-        """Clean pins that fit, those sharing the bus first, then pins that waste no ADC."""
+        """Free channels of an expander first (that is what it is there for), then clean board
+        pins that fit: those sharing the bus first, then pins that waste no ADC."""
         if need in SHARED:
             bus = [pin for pin, (n, _, _) in used.items() if n == need]
             if bus:
                 return bus
+        provided = [ch for ch, kind in channels.items() if kind == need and ch not in used]
         fits = [pin for pin, spec in board["pins"].items()
                 if pin not in used and "caution" not in spec and unfit(board, pin, need) is None]
-        return sorted(fits, key=lambda pin: need != "adc" and unfit(board, pin, "adc") is None)
+        return provided + sorted(fits, key=lambda pin: need != "adc" and unfit(board, pin, "adc") is None)
 
     for dev, spec, reason in wrong:     # hints come from what the valid assignments leave free
         options = free_for(spec["needs"])

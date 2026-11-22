@@ -7,11 +7,13 @@ small indoor growing setups (house plants, microgreens, mushrooms) on a local ne
 
 Mid-restructure. `docs/plan/restructure-plan.md` is the roadmap. Done so far: phase 0
 (hygiene), phase 1 (schemas and catalog), phase 2 (hub, simulator, scenario tests) and
-the status/LED engine from phase 3. Two follow-on plans have their first phase done:
-`docs/plan/dashboard-plan.md` D1 (hub groundwork: decision trace, operator commands,
-retention) and `docs/plan/installation-plan.md` I1 (assembly and test data per part, board
-pin maps, pin validation). Nothing has run on real hardware yet, and no pin, wiring or
-power value in the catalog has been confirmed on a bench (`datasheet_checked: false`).
+the status/LED engine from phase 3. Two follow-on plans are under way:
+`docs/plan/dashboard-plan.md` D1 (hub groundwork) and D2 (read-only dashboard), and
+`docs/plan/installation-plan.md` I1 (assembly and test data per part, pin validation) and the
+software half of I2 (ESPHome config generation, node contract suite). Nothing has run on real
+hardware yet: no pin, wiring or power value in the catalog has been confirmed on a bench
+(`datasheet_checked: false`), and the generated firmware passes `esphome config` but has
+never been compiled or flashed.
 
 ## Layout
 
@@ -25,9 +27,13 @@ power value in the catalog has been confirmed on a bench (`datasheet_checked: fa
 | `sites/local/` | Gitignored. A real site and its `secrets.yaml` |
 | `packages/core/fsf_core` | Loading and validation, recipe layering, pin checks, bus, clock, topic contract |
 | `packages/hub/fsf_hub` | Control loops, safety limits, operator commands, zone status, LED rendering, SQLite store with retention |
+| `packages/core/fsf_core/firmware` | ESPHome config generation from a site file; `fsf_node.h` is the C++ shared by every node |
+| `packages/core/fsf_core/nodetest.py` | Node contract suite, run against simulated or real nodes |
 | `packages/sim/fsf_sim` | Simulated nodes, zone physics, fault injection, `MockSystem` test harness |
-| `tests/unit`, `tests/contract`, `tests/system` | Core logic, MQTT payload conformance, scenario tests |
-| `deploy/` | Dockerfile and compose files for the mock stack |
+| `packages/web/fsf_web` | Dashboard service: read-only FastAPI over the hub database and live MQTT state |
+| `packages/web/frontend` | Dashboard frontend (Vue 3, Vite, uPlot), built to `dist/` and served by `fsf_web` |
+| `tests/unit`, `tests/contract`, `tests/system`, `tests/web` | Core logic, MQTT and node contract, scenario tests, dashboard API |
+| `deploy/` | Dockerfile and compose files: broker, hub, dashboard, and the simulator for the mock stack |
 | `iot-manager/`, `copilot/`, `nodes/`, `electronics/`, `homeassistant/` | Legacy prototype, kept for reference until later phases replace it. Do not extend it. |
 
 ## Commands
@@ -35,13 +41,19 @@ power value in the catalog has been confirmed on a bench (`datasheet_checked: fa
 ```
 just validate          # catalog + example sites against the schemas
 just validate --pins   # also propose board pins for devices that have none assigned
-just test              # all tests, about a minute
+just test              # all tests, about two minutes
+just firmware sites/examples/houseplants --include-sim    # ESPHome configs into build/firmware/
+just node-test shelf-node --site <site> --actuate         # contract suite against a real broker
+just web-build         # build the dashboard frontend (needs Node.js)
 just lint              # ruff, same as CI
-just mock mushrooms 600   # simulated site against a real Mosquitto broker in Docker, 600x speed
+just mock mushrooms 600   # simulated site against a real Mosquitto broker in Docker, 600x speed;
+                          # dashboard on http://localhost:8080
 just mock-watch        # tail every MQTT message of the running mock stack
 ```
 
-Without `just`/`uv`: `pip install -e . pytest ruff`, then `python -m fsf_core validate`, `pytest`, `ruff check .`.
+Without `just`/`uv`: `pip install -e ".[web]" pytest ruff httpx`, then `fsf validate` (or
+`python -m fsf_core validate`), `pytest`, `ruff check .`. The dashboard tests are skipped
+without FastAPI, and the ESPHome validation test without the `esphome` command.
 
 ## How the pieces fit
 
@@ -62,6 +74,12 @@ Without `just`/`uv`: `pip install -e . pytest ruff`, then `python -m fsf_core va
   change of decision, not per tick), every device command with its ack, and events with a
   level. Raw readings, trace and commands age out (`retention` in the site file); 5-minute and
   hourly rollups and events are kept. A retained `hub/state` carries plantings and actuators.
+- The dashboard never writes: it opens the hub's SQLite file read-only and subscribes to
+  MQTT. Actions (dashboard plan D4) must go through hub commands, not the database.
+- Firmware is generated, never hand-edited: device blocks come from the ESPHome driver
+  `template` of each model, the contract parts (status as birth and last will, leases that
+  the node ends itself, acks) from `fsf_core/firmware`. Soil probes sit on an I2C ADC
+  (`pins: { adc: soil-adc/A0 }`), which keeps the example builds within the board's pins.
 - Zone status comes from recipe target bands (debounced), alerts (immediate), and safety
   conditions (`offline`, `sensor_stale`, `reservoir_low`). The theme's `priority` list picks
   which one the LED segment shows.
@@ -72,6 +90,9 @@ Without `just`/`uv`: `pip install -e . pytest ruff`, then `python -m fsf_core va
   driver per runtime with an honest `status` (`untested` until someone has run it). Give it
   `pins`, `wiring`, `power`, `bench_test` and `troubleshooting`, and keep
   `datasheet_checked: false` until the values are confirmed against the datasheet.
+- **Make a part buildable**: give its ESPHome driver a `template` (and `control` for an
+  actuator); sensor entities are named `${id}_<quantity>`. Then check the output with
+  `fsf firmware build ... --include-sim` and `esphome config`.
 - **Add a board pin map**: `pins` in `catalog/boards/`. Mark strapping and shared pins with
   `caution`; they are accepted with a warning and never proposed.
 - **Add a recipe**: new file in `catalog/recipes/`. Keep `verified: false` and `sources: []`

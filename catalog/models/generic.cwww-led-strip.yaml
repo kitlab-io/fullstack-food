@@ -4,7 +4,20 @@ name: "12 V CW/WW LED strip"
 implements: [actuator.grow_light]
 interface: { bus: pwm, supply_v: [12, 12], switched_by: mosfet }
 drivers:
-  - { runtime: esphome, platform: cwww light, status: untested }
+  - runtime: esphome
+    platform: ledc output
+    status: untested
+    control: { type: level, outputs: [cold, warm] }
+    template: |
+      output:
+        - platform: ledc
+          pin: ${pin.cold}
+          id: ${id}_cold
+          frequency: 1220Hz
+        - platform: ledc
+          pin: ${pin.warm}
+          id: ${id}_warm
+          frequency: 1220Hz
   - { runtime: sim, status: verified }
 # Pins, wiring, power and bench values below are from general experience with this part.
 # Confirm them against the datasheet and on the bench, then set datasheet_checked: true.

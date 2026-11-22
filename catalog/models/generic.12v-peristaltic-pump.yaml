@@ -4,7 +4,17 @@ name: "12 V peristaltic pump"
 implements: [actuator.pump]
 interface: { bus: gpio, supply_v: [12, 12], switched_by: mosfet }
 drivers:
-  - { runtime: esphome, platform: gpio switch, status: untested }
+  - runtime: esphome
+    platform: gpio switch
+    status: untested
+    control: { type: switch }
+    template: |
+      switch:
+        - platform: gpio
+          pin: ${pin.gate}
+          id: ${id}_switch
+          restore_mode: ALWAYS_OFF
+          internal: true
   - { runtime: sim, status: verified }
 # Pins, wiring, power and bench values below are from general experience with this part.
 # Confirm them against the datasheet and on the bench, then set datasheet_checked: true.

@@ -4,7 +4,23 @@ name: "HC-SR04 ultrasonic distance sensor"
 implements: [sensor.water_level]
 interface: { bus: gpio, supply_v: [5.0, 5.0] }
 drivers:
-  - { runtime: esphome, platform: ultrasonic, status: untested }
+  - runtime: esphome
+    platform: ultrasonic
+    status: untested
+    template: |
+      sensor:
+        - platform: ultrasonic
+          trigger_pin: ${pin.trigger}
+          echo_pin: ${pin.echo}
+          update_interval: 30s
+          id: ${id}_water_level
+          internal: true
+          filters:
+            - multiply: 100.0
+            - calibrate_linear:
+                - ${cal.empty_cm} -> 0.0
+                - ${cal.full_cm} -> 100.0
+            - clamp: { min_value: 0, max_value: 100 }
   - { runtime: linux, module: adafruit_hcsr04, status: bench }
   - { runtime: sim, status: verified }
 # Pins, wiring, power and bench values below are from general experience with this part.

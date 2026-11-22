@@ -9,18 +9,22 @@ nodes:
     board: esp32-c3-devkitm
     runtime: sim
     devices:
-      - { id: inc-air,    model: aosong.aht20,               as: sensor.air_temp_humidity }
+      # Pins were proposed by `just validate --pins`. Calibration values are examples: replace them
+      # with measured ones before trusting soil moisture or reservoir level on real hardware.
+      - { id: inc-air,    model: aosong.aht20,               as: sensor.air_temp_humidity, pins: { sda: GPIO5, scl: GPIO6 } }
       - { id: inc-heater, model: generic.seedling-heat-mat,  as: actuator.heater }
   - id: fruiting-node
     board: esp32-c3-devkitm
     runtime: sim
     devices:
-      - { id: fr-climate,    model: sensirion.scd40,               as: [sensor.co2, sensor.air_temp_humidity] }
-      - { id: fr-heater,     model: generic.12v-heat-wire,         as: actuator.heater }
+      # Pins were proposed by `just validate --pins`. Calibration values are examples: replace them
+      # with measured ones before trusting soil moisture or reservoir level on real hardware.
+      - { id: fr-climate,    model: sensirion.scd40,               as: [sensor.co2, sensor.air_temp_humidity], pins: { sda: GPIO5, scl: GPIO6 } }
+      - { id: fr-heater,     model: generic.12v-heat-wire,         as: actuator.heater, pins: { gate: GPIO7 } }
       - { id: fr-humidifier, model: generic.ultrasonic-humidifier, as: actuator.humidifier }
-      - { id: fr-fan,        model: generic.12v-fan,               as: actuator.fan }
-      - { id: fr-light,      model: generic.cwww-led-strip,        as: actuator.grow_light }
-      - { id: status-strip,  model: worldsemi.sk6812-rgbw,         as: indicator.led_strip, led_count: 20 }
+      - { id: fr-fan,        model: generic.12v-fan,               as: actuator.fan, pins: { pwm: GPIO10 } }
+      - { id: fr-light,      model: generic.cwww-led-strip,        as: actuator.grow_light, pins: { cold: GPIO0, warm: GPIO1 } }
+      - { id: status-strip,  model: worldsemi.sk6812-rgbw,         as: indicator.led_strip, led_count: 20, pins: { data: GPIO3 } }
 zones:
   - id: incubation-chamber
     kind: chamber

@@ -12,6 +12,7 @@ from __future__ import annotations
 import json
 import sqlite3
 from datetime import datetime, timedelta
+from pathlib import Path
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS readings (t TEXT NOT NULL, device TEXT NOT NULL, quantity TEXT NOT NULL, value REAL NOT NULL);
@@ -42,7 +43,11 @@ ROLLUP_RESOLUTIONS = (300, 3600)    # seconds: 5-minute and hourly buckets
 
 
 class Store:
-    def __init__(self, path: str = ":memory:"):
+    def __init__(self, path: str = ":memory:", readonly: bool = False):
+        """readonly: open an existing file without writing to it (the dashboard reads the hub's file)."""
+        if readonly:
+            self._db = sqlite3.connect(f"file:{Path(path).as_posix()}?mode=ro", uri=True)
+            return
         self._db = sqlite3.connect(path)
         if path != ":memory:":
             self._db.execute("PRAGMA journal_mode=WAL")
@@ -62,17 +67,19 @@ class Store:
     def reading(self, t: datetime, device: str, quantity: str, value: float) -> None:
         self._db.execute("INSERT INTO readings VALUES (?, ?, ?, ?)", (t.isoformat(), device, quantity, value))
 
-    def readings(self, device: str, quantity: str, since: datetime | None = None) -> list[tuple[datetime, float]]:
+    def readings(self, device: str, quantity: str, since: datetime | None = None,
+                 until: datetime | None = None) -> list[tuple[datetime, float]]:
         rows = self._db.execute(
-            "SELECT t, value FROM readings WHERE device = ? AND quantity = ? AND t >= ? ORDER BY t",
-            (device, quantity, since.isoformat() if since else ""))
+            "SELECT t, value FROM readings WHERE device = ? AND quantity = ? AND t >= ? AND t < ? ORDER BY t",
+            (device, quantity, since.isoformat() if since else "", until.isoformat() if until else "~"))
         return [(datetime.fromisoformat(t), v) for t, v in rows]
 
-    def rollups(self, device: str, quantity: str, res: int, since: datetime | None = None) -> list[dict]:
+    def rollups(self, device: str, quantity: str, res: int, since: datetime | None = None,
+                until: datetime | None = None) -> list[dict]:
         """Min/mean/max per bucket of `res` seconds; `t` is the start of the bucket."""
         rows = self._db.execute(
-            "SELECT t, min, mean, max, n FROM rollups WHERE res = ? AND device = ? AND quantity = ? AND t >= ? ORDER BY t",
-            (res, device, quantity, since.isoformat() if since else ""))
+            "SELECT t, min, mean, max, n FROM rollups WHERE res = ? AND device = ? AND quantity = ? AND t >= ? AND t < ? ORDER BY t",
+            (res, device, quantity, since.isoformat() if since else "", until.isoformat() if until else "~"))
         return [{"t": datetime.fromisoformat(t), "min": lo, "mean": mean, "max": hi, "n": n} for t, lo, mean, hi, n in rows]
 
     # -- events
@@ -192,6 +199,11 @@ class Store:
         self._db.execute("DELETE FROM decisions WHERE t < ?", (trace_cutoff,))
         self._db.execute("DELETE FROM commands WHERE t < ?", (trace_cutoff,))
         self._db.commit()
+
+    def rolled_up_until(self) -> datetime | None:
+        """Readings before this are in the rollups; later ones are only in the raw table."""
+        done = self.get_setting("rollup_until")
+        return datetime.fromisoformat(done) if done else None
 
     def counts(self) -> dict[str, int]:
         return {table: self._db.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0]

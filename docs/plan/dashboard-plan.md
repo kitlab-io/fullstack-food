@@ -1,7 +1,7 @@
 # Web dashboard plan
 
-Status (2026-11-22): the recommended options in section 9 are accepted. Phase D1 is built
-and covered by scenario tests; D2 to D5 are not started. It builds on the hub, simulator and
+Status (2026-11-22): the recommended options in section 9 are accepted. Phases D1 and D2
+are built; D3 to D5 are not started. It builds on the hub, simulator and
 MQTT contract described in `AGENTS.md`.
 
 How D1 differs from the text below:
@@ -18,6 +18,22 @@ How D1 differs from the text below:
   slowly by design.
 - The mock stack's database is `/data/mock.db` on the `mock-data` volume, emptied at each
   start (`--reset-db`).
+
+How D2 stands:
+
+- `packages/web`: `fsf_web` (FastAPI, GET only) and a Vue 3 + Vite + uPlot frontend with
+  three pages: zones overview, zone detail (readings against bands, charts with the target
+  band and stage marks, actuator timeline, the latest decision per loop, LED preview) and
+  devices. Live updates over one SSE stream. No CDN assets; system fonts.
+- It is in the Docker image and both compose files, on `127.0.0.1:8080`. There is no login
+  yet (D4), so it is not published to the network.
+- Checked by API tests against a `MockSystem` and by hand in a browser against the mock
+  stack (mushrooms and house plants; desktop and phone width). There are no browser tests
+  yet (section 7), and the Pi Zero performance budget has not been measured.
+- Not in D2: which layer set each target (the resolved recipe does not record it), stage
+  durations on the stage timeline, per-status troubleshooting links, commissioning state.
+- The decision trace now also stores a row when a loop's setpoint changes, so the "why"
+  panel shows the target in force.
 
 ## 1. Goals
 

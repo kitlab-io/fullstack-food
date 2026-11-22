@@ -79,6 +79,33 @@
         "additionalProperties": false
       }
     },
+    "esphome": {
+      "type": "object",
+      "description": "What firmware generation puts in the ESPHome platform block",
+      "properties": {
+        "platform": {
+          "enum": [
+            "esp32",
+            "esp8266",
+            "rp2040"
+          ]
+        },
+        "board": {
+          "type": "string"
+        },
+        "framework": {
+          "enum": [
+            "esp-idf",
+            "arduino"
+          ]
+        }
+      },
+      "required": [
+        "platform",
+        "board"
+      ],
+      "additionalProperties": false
+    },
     "notes": {
       "type": "string"
     }

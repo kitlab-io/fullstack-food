@@ -194,3 +194,6 @@ out/
 
 # Generated docs and builds
 build/
+
+# Dashboard frontend
+node_modules/

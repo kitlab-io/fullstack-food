@@ -4,7 +4,17 @@ name: "Sensirion SCD40"
 implements: [sensor.co2, sensor.air_temp_humidity]
 interface: { bus: i2c, addresses: [0x62], supply_v: [2.4, 5.5] }
 drivers:
-  - { runtime: esphome, platform: scd4x, status: untested }
+  - runtime: esphome
+    platform: scd4x
+    status: untested
+    template: |
+      sensor:
+        - platform: scd4x
+          update_interval: 30s
+          automatic_self_calibration: false
+          co2: { id: ${id}_co2, internal: true }
+          temperature: { id: ${id}_air_temperature, internal: true }
+          humidity: { id: ${id}_relative_humidity, internal: true }
   - { runtime: linux, module: adafruit_scd4x, status: untested }
   - { runtime: sim, status: verified }
 # Pins, wiring, power and bench values below are from general experience with this part.

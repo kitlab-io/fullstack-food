@@ -4,7 +4,17 @@ name: "Bosch BME280"
 implements: [sensor.air_temp_humidity, sensor.barometric_pressure]
 interface: { bus: i2c, addresses: [0x76, 0x77], supply_v: [1.8, 3.6] }
 drivers:
-  - { runtime: esphome, platform: bme280_i2c, status: untested }
+  - runtime: esphome
+    platform: bme280_i2c
+    status: untested
+    template: |
+      sensor:
+        - platform: bme280_i2c
+          address: 0x76
+          update_interval: 30s
+          temperature: { id: ${id}_air_temperature, internal: true }
+          humidity: { id: ${id}_relative_humidity, internal: true }
+          pressure: { id: ${id}_pressure, internal: true }
   - { runtime: linux, module: adafruit_bme280, status: bench }
   - { runtime: sim, status: verified }
 # Pins, wiring, power and bench values below are from general experience with this part.

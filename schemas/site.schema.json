@@ -132,14 +132,18 @@
                 },
                 "pins": {
                   "type": "object",
-                  "description": "signal -> board pin, e.g. { sda: GPIO6, scl: GPIO7 }. Signals are listed by the model.",
+                  "description": "signal -> board pin (GPIO6) or a channel another device on the node provides (soil-adc/A0). Signals are listed by the model.",
                   "additionalProperties": {
                     "type": "string",
-                    "pattern": "^[A-Z0-9_]+$"
+                    "pattern": "^([A-Z0-9_]+|[a-z0-9][a-z0-9._-]*/[A-Z0-9_]+)$"
                   }
                 },
                 "calibration": {
-                  "type": "object"
+                  "type": "object",
+                  "description": "Values the model's calibration procedure produces, e.g. { dry_v: 2.6, wet_v: 1.2 }",
+                  "additionalProperties": {
+                    "type": "number"
+                  }
                 },
                 "flow_ml_per_s": {
                   "type": "number",

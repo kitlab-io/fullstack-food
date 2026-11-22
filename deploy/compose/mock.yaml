@@ -10,6 +10,12 @@ services:
     volumes:
       - mock-data:/data
 
+  web:
+    command: ["python", "-m", "fsf_web", "--site", "sites/examples/${FSF_SITE:-houseplants}",
+              "--mqtt-host", "broker", "--db", "/data/mock.db", "--host", "0.0.0.0", "--clock", "bus"]
+    volumes:
+      - mock-data:/data
+
   sim:
     build:
       context: ../..

@@ -86,7 +86,44 @@
           },
           "template": {
             "type": "string",
-            "description": "Config snippet for this runtime with ${id} and ${pin.<signal>} placeholders. Filled in when firmware generation lands (installation plan phase I2)."
+            "description": "Config snippet for this runtime. Placeholders: ${id} (device id as an identifier), ${pin.<signal>}, ${cal.<value>}, ${led_count}. A sensor entity is named ${id}_<quantity>."
+          },
+          "signal_templates": {
+            "type": "object",
+            "description": "signal -> snippet used when that signal is on a board pin; when it is on a channel, the provider's provides_templates is used instead",
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "provides_templates": {
+            "type": "object",
+            "description": "kind of signal -> snippet added for each consumer on one of this part's channels. Extra placeholders: ${provider}, ${channel}",
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "control": {
+            "type": "object",
+            "description": "Actuators: what the lease switches. switch: the entity ${id}_switch. level: float outputs ${id}_<name>.",
+            "properties": {
+              "type": {
+                "enum": [
+                  "switch",
+                  "level"
+                ]
+              },
+              "outputs": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "minItems": 1
+              }
+            },
+            "required": [
+              "type"
+            ],
+            "additionalProperties": false
           }
         },
         "required": [
@@ -136,6 +173,26 @@
           "needs"
         ],
         "additionalProperties": false
+      }
+    },
+    "provides": {
+      "type": "object",
+      "description": "Channels this part offers to other devices on the same node, by kind of signal, e.g. { adc: [A0, A1, A2, A3] }",
+      "propertyNames": {
+        "enum": [
+          "adc",
+          "digital_in",
+          "digital_out",
+          "pwm"
+        ]
+      },
+      "additionalProperties": {
+        "type": "array",
+        "items": {
+          "type": "string",
+          "pattern": "^[A-Z0-9_]+$"
+        },
+        "minItems": 1
       }
     },
     "wiring": {

@@ -9,13 +9,16 @@ nodes:
     board: esp32-c3-devkitm
     runtime: sim            # change to esphome when the real node exists
     devices:
-      - { id: room-air,        model: bosch.bme280,                 as: sensor.air_temp_humidity }
-      - { id: pothos-soil,     model: generic.capacitive-soil-v1.2, as: sensor.soil_moisture }
-      - { id: pothos-pump,     model: generic.12v-peristaltic-pump, as: actuator.pump, flow_ml_per_s: 1.6 }
-      - { id: snake-soil,      model: generic.capacitive-soil-v1.2, as: sensor.soil_moisture }
-      - { id: snake-pump,      model: generic.12v-peristaltic-pump, as: actuator.pump, flow_ml_per_s: 1.6 }
-      - { id: reservoir-level, model: generic.hc-sr04,              as: sensor.water_level }
-      - { id: status-strip,    model: worldsemi.sk6812-rgbw,        as: indicator.led_strip, led_count: 20 }
+      # Pins were proposed by `just validate --pins`. Calibration values are examples: replace them
+      # with measured ones before trusting soil moisture or reservoir level on real hardware.
+      - { id: room-air,        model: bosch.bme280,                 as: sensor.air_temp_humidity, pins: { sda: GPIO5, scl: GPIO6 } }
+      - { id: pothos-soil,     model: generic.capacitive-soil-v1.2, as: sensor.soil_moisture, pins: { adc: soil-adc/A0 }, calibration: { dry_v: 2.6, wet_v: 1.2 } }
+      - { id: pothos-pump,     model: generic.12v-peristaltic-pump, as: actuator.pump, flow_ml_per_s: 1.6, pins: { gate: GPIO7 } }
+      - { id: snake-soil,      model: generic.capacitive-soil-v1.2, as: sensor.soil_moisture, pins: { adc: soil-adc/A1 }, calibration: { dry_v: 2.6, wet_v: 1.2 } }
+      - { id: snake-pump,      model: generic.12v-peristaltic-pump, as: actuator.pump, flow_ml_per_s: 1.6, pins: { gate: GPIO10 } }
+      - { id: reservoir-level, model: generic.hc-sr04,              as: sensor.water_level, pins: { trigger: GPIO0, echo: GPIO1 }, calibration: { empty_cm: 30, full_cm: 5 } }
+      - { id: status-strip,    model: worldsemi.sk6812-rgbw,        as: indicator.led_strip, led_count: 20, pins: { data: GPIO3 } }
+      - { id: soil-adc,        model: ti.ads1115,                   as: sensor.analog_input, pins: { sda: GPIO5, scl: GPIO6 } }
 zones:
   - id: pothos-window
     kind: houseplant
