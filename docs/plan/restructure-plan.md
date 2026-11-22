@@ -1,6 +1,24 @@
 # Fullstack Food: repo restructure, mock system test, and doc generation plan
 
-Status: proposal (2026-11-22). Nothing in this plan has been implemented yet.
+Status (2026-11-22): phases 0, 1 and 2 are implemented, plus the status and LED engine from
+phase 3. The mock system passes scenario tests for all three growing scenarios. Phases 4 to 7
+and all hardware work are not started.
+
+Where the implementation differs from the text below:
+
+- The hub is a synchronous `tick()` loop with an injected clock and bus, not asyncio. It gives
+  the same result (one process, no Redis, time-accelerated tests) with less machinery.
+- Scenario tests run on an in-memory bus for determinism. The Docker mock stack runs the same
+  hub and simulator over a real Mosquitto broker.
+- Recipe `control` is a list of loops, each naming its actuator and strategy, and plantings
+  are a top-level list in the site file. The schema examples in sections 4 and 5 show the
+  original sketch; `schemas/` and `catalog/` are authoritative.
+- A stage that needs another zone, or has `advance.mode: manual`, waits for the grower to
+  confirm; the hub never assumes a planting was physically moved.
+- The mock stack has no web dashboard yet, and the legacy `iot-manager/` code has not been
+  moved into `packages/`; it is superseded rather than migrated.
+- The mock broker allows anonymous access on 127.0.0.1 only. Credentials, ACLs and TLS remain
+  phase 6.
 
 ## 1. Where the repo is today
 

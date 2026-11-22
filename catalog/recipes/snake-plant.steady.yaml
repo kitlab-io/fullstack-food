@@ -1,0 +1,19 @@
+# Values are placeholders chosen to exercise the control system.
+# Check them against a growing reference, list it under sources, then set verified: true.
+
+kind: Recipe
+id: snake-plant.steady
+species: snake-plant
+mode: steady
+verified: false
+sources: []
+targets:
+  soil_moisture: { min: 10, max: 45 }
+  air_temperature: { min: 13, max: 32 }
+control:
+  - id: watering
+    actuator: actuator.pump
+    strategy: dose
+    trigger: { quantity: soil_moisture, below: 15, for: 6h }
+    dose: { volume_ml: 120 }
+    limits: { min_interval: 72h, max_daily_ml: 120 }

@@ -1,0 +1,552 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Recipe",
+  "description": "Climate recipe. steady: targets/control/alerts at top level. staged: a list of stages.",
+  "type": "object",
+  "properties": {
+    "kind": {
+      "const": "Recipe"
+    },
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9._-]*$"
+    },
+    "species": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9._-]*$"
+    },
+    "description": {
+      "type": "string"
+    },
+    "mode": {
+      "enum": [
+        "steady",
+        "staged"
+      ]
+    },
+    "verified": {
+      "type": "boolean",
+      "description": "true once values are checked against the listed sources"
+    },
+    "sources": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "targets": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "min": {
+            "type": "number"
+          },
+          "target": {
+            "type": "number"
+          },
+          "max": {
+            "type": "number"
+          }
+        },
+        "required": [],
+        "additionalProperties": false,
+        "description": "Acceptable band and optional setpoint, in the quantity's catalog unit"
+      }
+    },
+    "control": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9._-]*$"
+          },
+          "actuator": {
+            "type": "string",
+            "pattern": "^(sensor|actuator|indicator|camera)\\.[a-z0-9_]+$"
+          },
+          "strategy": {
+            "enum": [
+              "dose",
+              "hysteresis",
+              "duty_cycle",
+              "schedule"
+            ]
+          },
+          "quantity": {
+            "type": "string",
+            "description": "hysteresis: quantity being controlled; its target comes from targets"
+          },
+          "direction": {
+            "enum": [
+              "raise",
+              "lower"
+            ],
+            "description": "hysteresis: whether the actuator raises or lowers the quantity"
+          },
+          "band": {
+            "type": "number"
+          },
+          "trigger": {
+            "type": "object",
+            "properties": {
+              "quantity": {
+                "type": "string"
+              },
+              "below": {
+                "type": "number"
+              },
+              "above": {
+                "type": "number"
+              },
+              "for": {
+                "type": "string",
+                "pattern": "^[0-9]+(\\.[0-9]+)?(s|m|h|d)$",
+                "description": "Duration, e.g. 30s, 5m, 2h, 14d"
+              }
+            },
+            "required": [
+              "quantity"
+            ],
+            "additionalProperties": false,
+            "description": "True when the zone reading of `quantity` is below/above the value, optionally continuously for a duration"
+          },
+          "dose": {
+            "type": "object",
+            "properties": {
+              "volume_ml": {
+                "type": "number"
+              }
+            },
+            "required": [
+              "volume_ml"
+            ],
+            "additionalProperties": false
+          },
+          "on_for": {
+            "type": "string",
+            "pattern": "^[0-9]+(\\.[0-9]+)?(s|m|h|d)$",
+            "description": "Duration, e.g. 30s, 5m, 2h, 14d"
+          },
+          "every": {
+            "type": "string",
+            "pattern": "^[0-9]+(\\.[0-9]+)?(s|m|h|d)$",
+            "description": "Duration, e.g. 30s, 5m, 2h, 14d"
+          },
+          "also_when": {
+            "type": "object",
+            "properties": {
+              "quantity": {
+                "type": "string"
+              },
+              "above": {
+                "type": "number"
+              },
+              "until_below": {
+                "type": "number"
+              }
+            },
+            "required": [
+              "quantity",
+              "above"
+            ],
+            "additionalProperties": false
+          },
+          "on_at": {
+            "type": "string",
+            "pattern": "^[0-2][0-9]:[0-5][0-9]$",
+            "description": "schedule: local start time; quote it in YAML"
+          },
+          "hours": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 24
+          },
+          "level": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          },
+          "limits": {
+            "type": "object",
+            "properties": {
+              "max_on": {
+                "type": "string",
+                "pattern": "^[0-9]+(\\.[0-9]+)?(s|m|h|d)$",
+                "description": "Duration, e.g. 30s, 5m, 2h, 14d"
+              },
+              "min_off": {
+                "type": "string",
+                "pattern": "^[0-9]+(\\.[0-9]+)?(s|m|h|d)$",
+                "description": "Duration, e.g. 30s, 5m, 2h, 14d"
+              },
+              "min_interval": {
+                "type": "string",
+                "pattern": "^[0-9]+(\\.[0-9]+)?(s|m|h|d)$",
+                "description": "Duration, e.g. 30s, 5m, 2h, 14d"
+              },
+              "max_daily_ml": {
+                "type": "number"
+              }
+            },
+            "required": [],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "additionalProperties": false,
+        "description": "One control loop. `actuator` and `strategy` are required in recipes; overlays may give only `id` plus the fields to change."
+      }
+    },
+    "alerts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string"
+          },
+          "quantity": {
+            "type": "string"
+          },
+          "below": {
+            "type": "number"
+          },
+          "above": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "status",
+          "quantity"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "stages": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9._-]*$"
+          },
+          "description": {
+            "type": "string"
+          },
+          "zone_role": {
+            "type": "string",
+            "description": "Role of the zone this stage must run in; omit to stay in the current zone"
+          },
+          "duration": {
+            "type": "object",
+            "properties": {
+              "typical": {
+                "type": "string",
+                "pattern": "^[0-9]+(\\.[0-9]+)?(s|m|h|d)$",
+                "description": "Duration, e.g. 30s, 5m, 2h, 14d"
+              },
+              "min": {
+                "type": "string",
+                "pattern": "^[0-9]+(\\.[0-9]+)?(s|m|h|d)$",
+                "description": "Duration, e.g. 30s, 5m, 2h, 14d"
+              },
+              "max": {
+                "type": "string",
+                "pattern": "^[0-9]+(\\.[0-9]+)?(s|m|h|d)$",
+                "description": "Duration, e.g. 30s, 5m, 2h, 14d"
+              }
+            },
+            "required": [],
+            "additionalProperties": false
+          },
+          "advance": {
+            "type": "object",
+            "properties": {
+              "mode": {
+                "enum": [
+                  "manual",
+                  "elapsed",
+                  "condition"
+                ]
+              },
+              "when": {
+                "type": "object",
+                "properties": {
+                  "quantity": {
+                    "type": "string"
+                  },
+                  "below": {
+                    "type": "number"
+                  },
+                  "above": {
+                    "type": "number"
+                  },
+                  "for": {
+                    "type": "string",
+                    "pattern": "^[0-9]+(\\.[0-9]+)?(s|m|h|d)$",
+                    "description": "Duration, e.g. 30s, 5m, 2h, 14d"
+                  }
+                },
+                "required": [
+                  "quantity"
+                ],
+                "additionalProperties": false,
+                "description": "True when the zone reading of `quantity` is below/above the value, optionally continuously for a duration"
+              },
+              "hint": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "mode"
+            ],
+            "additionalProperties": false
+          },
+          "targets": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "object",
+              "properties": {
+                "min": {
+                  "type": "number"
+                },
+                "target": {
+                  "type": "number"
+                },
+                "max": {
+                  "type": "number"
+                }
+              },
+              "required": [],
+              "additionalProperties": false,
+              "description": "Acceptable band and optional setpoint, in the quantity's catalog unit"
+            }
+          },
+          "control": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "pattern": "^[a-z0-9][a-z0-9._-]*$"
+                },
+                "actuator": {
+                  "type": "string",
+                  "pattern": "^(sensor|actuator|indicator|camera)\\.[a-z0-9_]+$"
+                },
+                "strategy": {
+                  "enum": [
+                    "dose",
+                    "hysteresis",
+                    "duty_cycle",
+                    "schedule"
+                  ]
+                },
+                "quantity": {
+                  "type": "string",
+                  "description": "hysteresis: quantity being controlled; its target comes from targets"
+                },
+                "direction": {
+                  "enum": [
+                    "raise",
+                    "lower"
+                  ],
+                  "description": "hysteresis: whether the actuator raises or lowers the quantity"
+                },
+                "band": {
+                  "type": "number"
+                },
+                "trigger": {
+                  "type": "object",
+                  "properties": {
+                    "quantity": {
+                      "type": "string"
+                    },
+                    "below": {
+                      "type": "number"
+                    },
+                    "above": {
+                      "type": "number"
+                    },
+                    "for": {
+                      "type": "string",
+                      "pattern": "^[0-9]+(\\.[0-9]+)?(s|m|h|d)$",
+                      "description": "Duration, e.g. 30s, 5m, 2h, 14d"
+                    }
+                  },
+                  "required": [
+                    "quantity"
+                  ],
+                  "additionalProperties": false,
+                  "description": "True when the zone reading of `quantity` is below/above the value, optionally continuously for a duration"
+                },
+                "dose": {
+                  "type": "object",
+                  "properties": {
+                    "volume_ml": {
+                      "type": "number"
+                    }
+                  },
+                  "required": [
+                    "volume_ml"
+                  ],
+                  "additionalProperties": false
+                },
+                "on_for": {
+                  "type": "string",
+                  "pattern": "^[0-9]+(\\.[0-9]+)?(s|m|h|d)$",
+                  "description": "Duration, e.g. 30s, 5m, 2h, 14d"
+                },
+                "every": {
+                  "type": "string",
+                  "pattern": "^[0-9]+(\\.[0-9]+)?(s|m|h|d)$",
+                  "description": "Duration, e.g. 30s, 5m, 2h, 14d"
+                },
+                "also_when": {
+                  "type": "object",
+                  "properties": {
+                    "quantity": {
+                      "type": "string"
+                    },
+                    "above": {
+                      "type": "number"
+                    },
+                    "until_below": {
+                      "type": "number"
+                    }
+                  },
+                  "required": [
+                    "quantity",
+                    "above"
+                  ],
+                  "additionalProperties": false
+                },
+                "on_at": {
+                  "type": "string",
+                  "pattern": "^[0-2][0-9]:[0-5][0-9]$",
+                  "description": "schedule: local start time; quote it in YAML"
+                },
+                "hours": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 24
+                },
+                "level": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 1
+                },
+                "limits": {
+                  "type": "object",
+                  "properties": {
+                    "max_on": {
+                      "type": "string",
+                      "pattern": "^[0-9]+(\\.[0-9]+)?(s|m|h|d)$",
+                      "description": "Duration, e.g. 30s, 5m, 2h, 14d"
+                    },
+                    "min_off": {
+                      "type": "string",
+                      "pattern": "^[0-9]+(\\.[0-9]+)?(s|m|h|d)$",
+                      "description": "Duration, e.g. 30s, 5m, 2h, 14d"
+                    },
+                    "min_interval": {
+                      "type": "string",
+                      "pattern": "^[0-9]+(\\.[0-9]+)?(s|m|h|d)$",
+                      "description": "Duration, e.g. 30s, 5m, 2h, 14d"
+                    },
+                    "max_daily_ml": {
+                      "type": "number"
+                    }
+                  },
+                  "required": [],
+                  "additionalProperties": false
+                }
+              },
+              "required": [
+                "id"
+              ],
+              "additionalProperties": false,
+              "description": "One control loop. `actuator` and `strategy` are required in recipes; overlays may give only `id` plus the fields to change."
+            }
+          },
+          "alerts": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "status": {
+                  "type": "string"
+                },
+                "quantity": {
+                  "type": "string"
+                },
+                "below": {
+                  "type": "number"
+                },
+                "above": {
+                  "type": "number"
+                }
+              },
+              "required": [
+                "status",
+                "quantity"
+              ],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "additionalProperties": false
+      },
+      "minItems": 1
+    }
+  },
+  "required": [
+    "kind",
+    "id",
+    "species",
+    "mode"
+  ],
+  "additionalProperties": false,
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "mode": {
+            "const": "staged"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "stages"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "mode": {
+            "const": "steady"
+          }
+        }
+      },
+      "then": {
+        "not": {
+          "required": [
+            "stages"
+          ]
+        }
+      }
+    }
+  ]
+}

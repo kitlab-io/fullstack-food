@@ -1,0 +1,8 @@
+kind: Model
+id: generic.12v-fan
+name: "12 V fan, 50 mm"
+implements: [actuator.fan]
+interface: { bus: pwm, supply_v: [12, 12], switched_by: mosfet }
+drivers:
+  - { runtime: esphome, platform: speed fan, status: untested }
+  - { runtime: sim, status: verified }

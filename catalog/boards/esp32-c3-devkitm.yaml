@@ -1,0 +1,7 @@
+kind: Board
+id: esp32-c3-devkitm
+name: "ESP32-C3-DevKitM-1"
+class: mcu
+runtimes: [esphome, circuitpython]
+os: []
+buses: [i2c, onewire, gpio, adc, pwm, led_data, wifi]

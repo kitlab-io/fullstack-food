@@ -1,0 +1,9 @@
+kind: Model
+id: sensirion.scd40
+name: "Sensirion SCD40"
+implements: [sensor.co2, sensor.air_temp_humidity]
+interface: { bus: i2c, addresses: [0x62], supply_v: [2.4, 5.5] }
+drivers:
+  - { runtime: esphome, platform: scd4x, status: untested }
+  - { runtime: linux, module: adafruit_scd4x, status: untested }
+  - { runtime: sim, status: verified }

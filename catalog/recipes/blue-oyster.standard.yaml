@@ -1,0 +1,90 @@
+# Values are placeholders chosen to exercise the control system.
+# Check them against a growing reference, list it under sources, then set verified: true.
+
+kind: Recipe
+id: blue-oyster.standard
+species: blue-oyster
+mode: staged
+verified: false
+sources: []
+stages:
+  - id: incubation
+    description: "Substrate colonises in the dark, warm and undisturbed."
+    zone_role: incubation
+    duration: { typical: 14d, min: 10d, max: 21d }
+    advance: { mode: manual, hint: "substrate fully colonised" }
+    targets:
+      air_temperature: { min: 21, target: 24, max: 27 }
+    control:
+      - id: heat
+        actuator: actuator.heater
+        strategy: hysteresis
+        quantity: air_temperature
+        direction: raise
+        band: 1
+        limits: { max_on: 30m, min_off: 2m }
+  - id: fruiting
+    description: "Cooler, humid, bright, with fresh air."
+    zone_role: fruiting
+    duration: { typical: 7d, min: 5d, max: 12d }
+    advance: { mode: manual, hint: "cap edges flatten" }
+    targets:
+      air_temperature: { min: 13, target: 16, max: 18 }
+      relative_humidity: { min: 85, target: 90, max: 97 }
+      co2: { max: 1000 }
+    control:
+      - id: heat
+        actuator: actuator.heater
+        strategy: hysteresis
+        quantity: air_temperature
+        direction: raise
+        band: 1
+        limits: { max_on: 30m, min_off: 2m }
+      - id: humidity
+        actuator: actuator.humidifier
+        strategy: hysteresis
+        quantity: relative_humidity
+        direction: raise
+        band: 3
+        limits: { max_on: 10m, min_off: 1m }
+      - id: fresh_air
+        actuator: actuator.fan
+        strategy: duty_cycle
+        on_for: 2m
+        every: 20m
+        also_when: { quantity: co2, above: 900, until_below: 700 }
+      - id: lighting
+        actuator: actuator.grow_light
+        strategy: schedule
+        on_at: "07:00"
+        hours: 12
+        level: 0.3
+  - id: harvest
+    description: "Pick the cluster; the chamber holds fruiting conditions until it is cleared."
+    zone_role: fruiting
+    advance: { mode: manual, hint: "harvest and clear the chamber" }
+    targets:
+      air_temperature: { min: 13, target: 16, max: 18 }
+      relative_humidity: { min: 85, target: 90, max: 97 }
+      co2: { max: 1000 }
+    control:
+      - id: heat
+        actuator: actuator.heater
+        strategy: hysteresis
+        quantity: air_temperature
+        direction: raise
+        band: 1
+        limits: { max_on: 30m, min_off: 2m }
+      - id: humidity
+        actuator: actuator.humidifier
+        strategy: hysteresis
+        quantity: relative_humidity
+        direction: raise
+        band: 3
+        limits: { max_on: 10m, min_off: 1m }
+      - id: fresh_air
+        actuator: actuator.fan
+        strategy: duty_cycle
+        on_for: 2m
+        every: 20m
+        also_when: { quantity: co2, above: 900, until_below: 700 }

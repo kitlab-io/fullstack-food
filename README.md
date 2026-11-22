@@ -1,6 +1,64 @@
 # fullstack-food
 
-## Setup 
+Local-network monitoring and climate control for house plants, microgreens and mushrooms,
+with RGB(W) LED strips that show the state of each growing area.
+
+The project is mid-restructure (see `docs/plan/restructure-plan.md`). What works today is
+the control system running against simulated hardware. Nothing below has run on real
+sensors or actuators yet.
+
+## Try the mock system
+
+Any machine with Python 3.12:
+
+```bash
+pip install -e . pytest
+python -m fsf_core validate     # check the catalog and the example sites
+pytest                          # simulate weeks of growing in about 30 seconds
+```
+
+With Docker, a simulated site runs against a real MQTT broker:
+
+```bash
+FSF_SITE=mushrooms FSF_SPEED=600 docker compose -f deploy/compose/base.yaml -f deploy/compose/mock.yaml up --build
+```
+
+`FSF_SITE` is `houseplants`, `microgreens` or `mushrooms`. `FSF_SPEED` is simulated seconds
+per real second. The hub log prints each zone status change. To watch the MQTT traffic:
+
+```bash
+docker compose -f deploy/compose/base.yaml -f deploy/compose/mock.yaml exec broker mosquitto_sub -t 'fsf/#' -v
+```
+
+To move a planting to its next stage (for example mushrooms from incubation to fruiting):
+
+```bash
+docker compose -f deploy/compose/base.yaml -f deploy/compose/mock.yaml exec broker mosquitto_pub -t fsf/mushrooms/hub/cmd -m '{"name":"advance_stage","planting":"oyster-1"}'
+```
+
+## What the scenario tests cover
+
+| Scenario | Checked |
+|---|---|
+| House plants | A dry pot is watered and its LED goes from needs-water back to ok; minimum interval and daily cap hold; an empty reservoir blocks the pump; a cold room raises an alert |
+| Microgreens | Germination, blackout, light and harvest stages advance on schedule; the light follows the photoperiod; the daily water cap holds; a cold room shows on the strip |
+| Mushrooms | Incubation chamber holds temperature; moving to the fruiting chamber switches setpoints; humidity, CO2, temperature and light stay in band; harvest and clear-down |
+| Faults | Stale sensor, stuck sensor, node offline, hub crash, hub restart mid-grow |
+
+## Where things are
+
+`AGENTS.md` describes the layout, commands and conventions. Definitions live in `catalog/`
+(generic components, exact models, species, recipes, LED themes) and `sites/` (one
+installation each), all validated against `schemas/`.
+
+Secrets never go in tracked files. Put local values in `sites/local/secrets.yaml` (gitignored).
+
+## Legacy prototype
+
+The original Raspberry Pi / Orange Pi prototype (`iot-manager/`, `homeassistant/`, `nodes/`)
+is kept for reference until the new stack runs on hardware.
+
+### Setup 
 
 Install Python 3.13.0 (via pyenv)
 
@@ -16,18 +74,7 @@ Create virtualenv in /srv/iot-manager
 In virtualenv in  /srv/iot-manager
 pip3 install -r iot-manager/requirements.txt
 
-## Developer setup
-
-```bash
-uv sync          # install dev tools (ruff, pytest)
-just lint        # same checks CI runs
-```
-
-Secrets never go in tracked files. Put local values in `sites/local/secrets.yaml`
-(gitignored); see `AGENTS.md` for conventions and `docs/plan/restructure-plan.md`
-for where the repo is heading.
-
-## Use
+### Use
 To interact with sensors via Circuitpython librarires:
 python3 sensor_i2c.py
 

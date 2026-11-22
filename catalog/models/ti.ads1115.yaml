@@ -1,0 +1,10 @@
+kind: Model
+id: ti.ads1115
+name: "TI ADS1115 16-bit ADC"
+implements: [sensor.analog_input]
+interface: { bus: i2c, addresses: [0x48, 0x49, 0x4A, 0x4B], supply_v: [2.0, 5.5] }
+drivers:
+  - { runtime: esphome, platform: ads1115, status: untested }
+  - { runtime: linux, module: adafruit_ads1x15, status: bench }
+  - { runtime: sim, status: verified }
+notes: "Bench script: iot-manager/devices/tests/ASD1x15.py"

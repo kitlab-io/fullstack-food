@@ -1,0 +1,10 @@
+kind: Model
+id: bosch.bme280
+name: "Bosch BME280"
+implements: [sensor.air_temp_humidity, sensor.barometric_pressure]
+interface: { bus: i2c, addresses: [0x76, 0x77], supply_v: [1.8, 3.6] }
+drivers:
+  - { runtime: esphome, platform: bme280_i2c, status: untested }
+  - { runtime: linux, module: adafruit_bme280, status: bench }
+  - { runtime: sim, status: verified }
+notes: "Bench script: iot-manager/devices/tests/BME280.py"

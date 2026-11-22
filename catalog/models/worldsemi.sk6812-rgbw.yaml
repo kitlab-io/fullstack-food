@@ -1,0 +1,10 @@
+kind: Model
+id: worldsemi.sk6812-rgbw
+name: "SK6812 RGBW LED strip"
+implements: [indicator.led_strip]
+interface: { bus: led_data, supply_v: [5, 5] }
+channels: rgbw
+color_order: GRBW
+drivers:
+  - { runtime: esphome, platform: esp32_rmt_led_strip, status: untested }
+  - { runtime: sim, status: verified }

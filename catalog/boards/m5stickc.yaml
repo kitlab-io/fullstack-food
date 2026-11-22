@@ -1,0 +1,8 @@
+kind: Board
+id: m5stickc
+name: "M5Stack StickC (ESP32)"
+class: mcu
+runtimes: [esphome, circuitpython]
+os: []
+buses: [i2c, gpio, adc, wifi]
+notes: "CircuitPython 9.2.4 was flashed on this board in the prototype."

@@ -1,0 +1,10 @@
+kind: Model
+id: generic.seedling-heat-mat
+name: "Mains seedling heat mat"
+implements: [actuator.heater]
+interface: { bus: mains_relay }
+drivers:
+  - { runtime: kasa, status: untested }
+  - { runtime: esphome, platform: gpio switch (relay), status: untested }
+  - { runtime: sim, status: verified }
+notes: "Mains load: switch through a certified smart plug or relay module."

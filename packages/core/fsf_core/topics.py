@@ -1,0 +1,38 @@
+"""The MQTT topic contract. Payload schemas are in schemas/mqtt/."""
+
+ROOT = "fsf"
+
+
+def device(site: str, node: str, device_id: str, leaf: str) -> str:
+    """leaf is one of: state (retained), cmd, ack."""
+    return f"{ROOT}/{site}/{node}/{device_id}/{leaf}"
+
+
+def node_status(site: str, node: str) -> str:
+    """Retained. Payload is the plain string `online` or `offline` (set as the MQTT last will)."""
+    return f"{ROOT}/{site}/{node}/status"
+
+
+def zone_status(site: str, zone: str) -> str:
+    return f"{ROOT}/{site}/zone/{zone}/status"
+
+
+def hub_cmd(site: str) -> str:
+    """Operator commands to the hub, e.g. {"name": "advance_stage", "planting": "oyster-1"}."""
+    return f"{ROOT}/{site}/hub/cmd"
+
+
+def clock(site: str) -> str:
+    """Retained simulated time, published only by the simulator."""
+    return f"{ROOT}/{site}/sim/clock"
+
+
+def matches(pattern: str, topic: str) -> bool:
+    """MQTT topic filter matching with + and # wildcards."""
+    p_parts, t_parts = pattern.split("/"), topic.split("/")
+    for i, p in enumerate(p_parts):
+        if p == "#":
+            return True
+        if i >= len(t_parts) or (p != "+" and p != t_parts[i]):
+            return False
+    return len(p_parts) == len(t_parts)

@@ -1,0 +1,8 @@
+kind: Goal
+id: quiet
+description: "Fewer fan runs: rely on the CO2 trigger more than the timer."
+overlay:
+  control:
+    - id: fresh_air
+      on_for: 1m
+      every: 30m

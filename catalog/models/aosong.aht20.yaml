@@ -1,0 +1,10 @@
+kind: Model
+id: aosong.aht20
+name: "Aosong AHT20"
+implements: [sensor.air_temp_humidity]
+interface: { bus: i2c, addresses: [0x38], supply_v: [2.0, 5.5] }
+drivers:
+  - { runtime: esphome, platform: aht10, status: untested }
+  - { runtime: linux, module: adafruit_ahtx0, status: bench }
+  - { runtime: sim, status: verified }
+notes: "Bench script: iot-manager/devices/tests/AHTx0.py"

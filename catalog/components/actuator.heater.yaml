@@ -1,0 +1,8 @@
+kind: Component
+id: actuator.heater
+class: actuator
+description: "Heat mat, heat wire or space heater."
+commands:
+  - { name: "on", args: { duration_s: number, level: number } }
+  - { name: "off" }
+safety: { requires_lease: true }

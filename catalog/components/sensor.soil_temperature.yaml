@@ -1,0 +1,5 @@
+kind: Component
+id: sensor.soil_temperature
+class: sensor
+measures:
+  - { quantity: soil_temperature, unit: degC }

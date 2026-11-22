@@ -1,0 +1,8 @@
+kind: Species
+id: pothos
+common_name: Pothos
+scientific_name: Epipremnum aureum
+category: houseplant
+defaults:
+  alerts:
+    - { status: critical, quantity: air_temperature, below: 10 }

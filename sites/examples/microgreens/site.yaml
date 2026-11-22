@@ -1,0 +1,25 @@
+kind: Site
+id: microgreens
+name: "Microgreens: one tray with watering and a grow light"
+timezone: UTC
+hub: { board: generic-linux }
+theme: default
+nodes:
+  - id: tray-node
+    board: esp32-c3-devkitm
+    runtime: sim
+    devices:
+      - { id: tray-air,        model: aosong.aht20,                 as: sensor.air_temp_humidity }
+      - { id: tray-soil,       model: generic.capacitive-soil-v1.2, as: sensor.soil_moisture }
+      - { id: tray-lux,        model: ams.tsl2591,                  as: sensor.light }
+      - { id: tray-pump,       model: generic.12v-peristaltic-pump, as: actuator.pump, flow_ml_per_s: 2.0 }
+      - { id: tray-light,      model: generic.cwww-led-strip,       as: actuator.grow_light }
+      - { id: reservoir-level, model: generic.hc-sr04,              as: sensor.water_level }
+      - { id: status-strip,    model: worldsemi.ws2812b,            as: indicator.led_strip, led_count: 10 }
+zones:
+  - id: tray1
+    kind: microgreens_tray
+    devices: [tray-air, tray-soil, tray-lux, tray-pump, tray-light, reservoir-level]
+    indicator: { strip: status-strip, leds: [0, 9] }
+plantings:
+  - { id: radish-1, zone: tray1, species: radish-microgreens, recipe: radish-microgreens.standard }

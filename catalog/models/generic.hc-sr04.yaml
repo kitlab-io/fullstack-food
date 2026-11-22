@@ -1,0 +1,10 @@
+kind: Model
+id: generic.hc-sr04
+name: "HC-SR04 ultrasonic distance sensor"
+implements: [sensor.water_level]
+interface: { bus: gpio, supply_v: [5.0, 5.0] }
+drivers:
+  - { runtime: esphome, platform: ultrasonic, status: untested }
+  - { runtime: linux, module: adafruit_hcsr04, status: bench }
+  - { runtime: sim, status: verified }
+notes: "Measures distance to the water surface; calibration maps empty/full distance to percent. Bench script: iot-manager/devices/tests/HCRS04.py"

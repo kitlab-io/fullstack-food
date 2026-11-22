@@ -1,0 +1,9 @@
+kind: Model
+id: generic.ultrasonic-humidifier
+name: "Ultrasonic humidifier / fogger"
+implements: [actuator.humidifier]
+interface: { bus: mains_relay }
+drivers:
+  - { runtime: kasa, status: untested }
+  - { runtime: esphome, platform: gpio switch (relay), status: untested }
+  - { runtime: sim, status: verified }

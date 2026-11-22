@@ -1,0 +1,10 @@
+seed: 22
+ambient:
+  air_temperature: { mean: 21, daily_amplitude: 1.5 }
+  relative_humidity: 50
+reservoirs:
+  reservoir-level: { capacity_ml: 4000, volume_ml: 4000 }
+zones:
+  tray1:
+    enclosure: open
+    soil: { initial: 78, evaporation_pct_per_h: 1.5, ml_per_percent: 4 }

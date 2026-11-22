@@ -1,0 +1,5 @@
+kind: Component
+id: sensor.barometric_pressure
+class: sensor
+measures:
+  - { quantity: pressure, unit: hPa }

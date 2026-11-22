@@ -1,0 +1,30 @@
+kind: Site
+id: houseplants
+name: "House plants: monitor and water two pots from one reservoir"
+timezone: UTC
+hub: { board: generic-linux }
+theme: default
+nodes:
+  - id: shelf-node
+    board: esp32-c3-devkitm
+    runtime: sim            # change to esphome when the real node exists
+    devices:
+      - { id: room-air,        model: bosch.bme280,                 as: sensor.air_temp_humidity }
+      - { id: pothos-soil,     model: generic.capacitive-soil-v1.2, as: sensor.soil_moisture }
+      - { id: pothos-pump,     model: generic.12v-peristaltic-pump, as: actuator.pump, flow_ml_per_s: 1.6 }
+      - { id: snake-soil,      model: generic.capacitive-soil-v1.2, as: sensor.soil_moisture }
+      - { id: snake-pump,      model: generic.12v-peristaltic-pump, as: actuator.pump, flow_ml_per_s: 1.6 }
+      - { id: reservoir-level, model: generic.hc-sr04,              as: sensor.water_level }
+      - { id: status-strip,    model: worldsemi.sk6812-rgbw,        as: indicator.led_strip, led_count: 20 }
+zones:
+  - id: pothos-window
+    kind: houseplant
+    devices: [room-air, pothos-soil, pothos-pump, reservoir-level]
+    indicator: { strip: status-strip, leds: [0, 9] }
+  - id: snake-shelf
+    kind: houseplant
+    devices: [room-air, snake-soil, snake-pump, reservoir-level]
+    indicator: { strip: status-strip, leds: [10, 19] }
+plantings:
+  - { id: pothos-1, zone: pothos-window, species: pothos,      recipe: pothos.steady }
+  - { id: snake-1,  zone: snake-shelf,   species: snake-plant, recipe: snake-plant.steady, goal: vacation }

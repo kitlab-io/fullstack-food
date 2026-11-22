@@ -1,0 +1,10 @@
+kind: Model
+id: aosong.dht22
+name: "Aosong DHT22 / AM2302"
+implements: [sensor.air_temp_humidity]
+interface: { bus: gpio, supply_v: [3.3, 5.5] }
+drivers:
+  - { runtime: esphome, platform: dht, status: untested }
+  - { runtime: linux, module: adafruit_dht, status: bench }
+  - { runtime: sim, status: verified }
+notes: "Bench script: iot-manager/devices/tests/DHT.py"

@@ -1,0 +1,23 @@
+kind: Theme
+id: default
+brightness: { day: 0.5, night: 0.05, night_hours: [22, 7] }
+# Highest priority first. A zone shows the first status in this list that is active.
+priority: [offline, sensor_stale, critical, reservoir_low, too_hot, too_cold, needs_water,
+           too_wet, too_dry, too_humid, stale_air, stage_ready, ok, idle]
+# Colours are [R, G, B, W]. Every status also has a distinct effect or hue family so
+# states stay distinguishable without relying on red/green alone.
+statuses:
+  ok:            { color: [0, 60, 0, 0],     effect: solid }
+  idle:          { color: [0, 0, 0, 0],      effect: "off" }
+  needs_water:   { color: [0, 0, 255, 0],    effect: breathe }
+  too_wet:       { color: [0, 0, 255, 0],    effect: solid }
+  reservoir_low: { color: [0, 0, 255, 0],    effect: blink }
+  too_cold:      { color: [0, 180, 255, 0],  effect: solid }
+  too_hot:       { color: [255, 40, 0, 0],   effect: solid }
+  too_dry:       { color: [255, 160, 0, 0],  effect: solid }
+  too_humid:     { color: [120, 0, 255, 0],  effect: solid }
+  stale_air:     { color: [255, 160, 0, 0],  effect: breathe }
+  stage_ready:   { color: [0, 0, 0, 255],    effect: breathe }
+  critical:      { color: [255, 0, 0, 0],    effect: blink }
+  sensor_stale:  { color: [255, 0, 255, 0],  effect: blink }
+  offline:       { color: [255, 0, 255, 0],  effect: blink_slow }

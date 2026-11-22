@@ -1,0 +1,10 @@
+kind: Model
+id: ams.tsl2591
+name: "ams TSL2591"
+implements: [sensor.light]
+interface: { bus: i2c, addresses: [0x29], supply_v: [3.3, 5.0] }
+drivers:
+  - { runtime: esphome, platform: tsl2591, status: untested }
+  - { runtime: linux, module: adafruit_tsl2591, status: bench }
+  - { runtime: sim, status: verified }
+notes: "Bench script: iot-manager/devices/tests/TSL2591.py"

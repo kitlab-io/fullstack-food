@@ -17,6 +17,17 @@ jobs:
       - run: uv sync
       - run: uv run ruff check .
 
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - run: uv sync
+      - name: Validate catalog and example sites
+        run: uv run python -m fsf_core validate
+      - name: Unit, contract and scenario tests
+        run: uv run pytest
+
   secrets:
     runs-on: ubuntu-latest
     steps:

@@ -1,0 +1,51 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Board",
+  "description": "Single-board computer or microcontroller board",
+  "type": "object",
+  "properties": {
+    "kind": {
+      "const": "Board"
+    },
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9._-]*$"
+    },
+    "name": {
+      "type": "string"
+    },
+    "class": {
+      "enum": [
+        "sbc",
+        "mcu"
+      ]
+    },
+    "runtimes": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "os": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "buses": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "notes": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "kind",
+    "id",
+    "class"
+  ],
+  "additionalProperties": false
+}

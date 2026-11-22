@@ -1,0 +1,10 @@
+kind: Model
+id: generic.capacitive-soil-v1.2
+name: "Capacitive soil moisture sensor v1.2"
+implements: [sensor.soil_moisture]
+interface: { bus: adc, supply_v: [3.3, 5.5] }
+drivers:
+  - { runtime: esphome, platform: adc, status: untested }
+  - { runtime: linux, module: adafruit_ads1x15, status: bench, requires: ti.ads1115 }
+  - { runtime: sim, status: verified }
+notes: "Analog output; needs dry/wet calibration per sensor. On an SBC it needs an external ADC."

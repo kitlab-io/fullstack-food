@@ -1,0 +1,9 @@
+kind: Model
+id: generic.12v-peristaltic-pump
+name: "12 V peristaltic pump"
+implements: [actuator.pump]
+interface: { bus: gpio, supply_v: [12, 12], switched_by: mosfet }
+drivers:
+  - { runtime: esphome, platform: gpio switch, status: untested }
+  - { runtime: sim, status: verified }
+notes: "Set flow_ml_per_s on the device from a timed measurement."

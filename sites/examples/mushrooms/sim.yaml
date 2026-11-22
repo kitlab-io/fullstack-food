@@ -1,0 +1,18 @@
+seed: 33
+ambient:
+  air_temperature: { mean: 14, daily_amplitude: 1.5 }
+  relative_humidity: 50
+zones:
+  incubation-chamber:
+    enclosure: chamber
+    air: { loss_per_h: 0.5, heater_degc_per_h: 10, humidity_loss_per_h: 1.0 }
+  fruiting-chamber:
+    enclosure: chamber
+    air:
+      loss_per_h: 0.5
+      heater_degc_per_h: 6
+      humidity_loss_per_h: 1.5
+      humidifier_pct_per_h: 300
+      fan_exchange_per_h: 4
+      co2_leak_per_h: 0.2
+      co2_production_ppm_per_h: 400

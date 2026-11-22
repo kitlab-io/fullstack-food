@@ -1,0 +1,5 @@
+kind: Component
+id: sensor.water_level
+class: sensor
+measures:
+  - { quantity: water_level, unit: percent }

@@ -1,0 +1,69 @@
+# Values are placeholders chosen to exercise the control system.
+# Check them against a growing reference, list it under sources, then set verified: true.
+
+kind: Recipe
+id: radish-microgreens.standard
+species: radish-microgreens
+mode: staged
+verified: false
+sources: []
+stages:
+  - id: germination
+    description: "Seeds soaked and sown, tray covered."
+    duration: { typical: 2d }
+    advance: { mode: elapsed }
+    targets:
+      soil_moisture: { min: 50, max: 90 }
+      air_temperature: { min: 18, max: 24 }
+    control:
+      - id: watering
+        actuator: actuator.pump
+        strategy: dose
+        trigger: { quantity: soil_moisture, below: 60, for: 10m }
+        dose: { volume_ml: 60 }
+        limits: { min_interval: 2h, max_daily_ml: 400 }
+  - id: blackout
+    description: "Covered and weighted, no light."
+    duration: { typical: 2d }
+    advance: { mode: elapsed }
+    targets:
+      soil_moisture: { min: 50, max: 90 }
+      air_temperature: { min: 18, max: 24 }
+    control:
+      - id: watering
+        actuator: actuator.pump
+        strategy: dose
+        trigger: { quantity: soil_moisture, below: 60, for: 10m }
+        dose: { volume_ml: 60 }
+        limits: { min_interval: 2h, max_daily_ml: 400 }
+  - id: light
+    description: "Uncovered under the grow light."
+    duration: { typical: 5d }
+    advance: { mode: elapsed }
+    targets:
+      soil_moisture: { min: 50, max: 90 }
+      air_temperature: { min: 18, max: 24 }
+    control:
+      - id: watering
+        actuator: actuator.pump
+        strategy: dose
+        trigger: { quantity: soil_moisture, below: 60, for: 10m }
+        dose: { volume_ml: 60 }
+        limits: { min_interval: 2h, max_daily_ml: 400 }
+      - id: lighting
+        actuator: actuator.grow_light
+        strategy: schedule
+        on_at: "06:00"
+        hours: 16
+  - id: harvest
+    description: "Ready to cut. Watering continues until the tray is cleared."
+    advance: { mode: manual, hint: "cut and clear the tray" }
+    targets:
+      soil_moisture: { min: 50, max: 90 }
+    control:
+      - id: watering
+        actuator: actuator.pump
+        strategy: dose
+        trigger: { quantity: soil_moisture, below: 60, for: 10m }
+        dose: { volume_ml: 60 }
+        limits: { min_interval: 2h, max_daily_ml: 400 }

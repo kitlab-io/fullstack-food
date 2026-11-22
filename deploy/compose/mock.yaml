@@ -1,0 +1,18 @@
+# Adds simulated nodes for the chosen example site and makes the hub follow simulated time.
+#   FSF_SITE   houseplants | microgreens | mushrooms   (default houseplants)
+#   FSF_SPEED  simulated seconds per real second       (default 120: one day every 12 minutes)
+services:
+  hub:
+    # Simulated time restarts with every run, so keep the hub's history in memory.
+    command: ["python", "-m", "fsf_hub", "--site", "sites/examples/${FSF_SITE:-houseplants}",
+              "--mqtt-host", "broker", "--db", ":memory:", "--clock", "bus"]
+
+  sim:
+    build:
+      context: ../..
+      dockerfile: deploy/Dockerfile
+    command: ["python", "-m", "fsf_sim", "--site", "sites/examples/${FSF_SITE:-houseplants}",
+              "--mqtt-host", "broker", "--speed", "${FSF_SPEED:-120}"]
+    depends_on:
+      broker:
+        condition: service_healthy

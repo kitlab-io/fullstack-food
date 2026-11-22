@@ -1,0 +1,110 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Model",
+  "description": "Exact part: what it implements, how it connects, which drivers exist and how well tested they are",
+  "type": "object",
+  "properties": {
+    "kind": {
+      "const": "Model"
+    },
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9._-]*$"
+    },
+    "name": {
+      "type": "string"
+    },
+    "implements": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^(sensor|actuator|indicator|camera)\\.[a-z0-9_]+$"
+      },
+      "minItems": 1
+    },
+    "interface": {
+      "type": "object",
+      "properties": {
+        "bus": {
+          "enum": [
+            "i2c",
+            "onewire",
+            "gpio",
+            "adc",
+            "pwm",
+            "led_data",
+            "usb",
+            "wifi",
+            "mains_relay"
+          ]
+        }
+      },
+      "required": [
+        "bus"
+      ],
+      "additionalProperties": true
+    },
+    "specs": {
+      "type": "object"
+    },
+    "channels": {
+      "enum": [
+        "rgb",
+        "rgbw"
+      ]
+    },
+    "color_order": {
+      "type": "string"
+    },
+    "drivers": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "runtime": {
+            "enum": [
+              "esphome",
+              "linux",
+              "circuitpython",
+              "kasa",
+              "sim"
+            ]
+          },
+          "status": {
+            "enum": [
+              "verified",
+              "bench",
+              "untested"
+            ],
+            "description": "verified: passes the test suite on tested_on; bench: has been run by hand; untested: expected to work"
+          },
+          "tested_on": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "runtime",
+          "status"
+        ],
+        "additionalProperties": true
+      },
+      "minItems": 1
+    },
+    "bom": {
+      "type": "object"
+    },
+    "notes": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "kind",
+    "id",
+    "implements",
+    "drivers"
+  ],
+  "additionalProperties": false
+}

@@ -1,0 +1,6 @@
+kind: Species
+id: snake-plant
+common_name: Snake plant
+scientific_name: Dracaena trifasciata
+category: houseplant
+notes: "Prefers to dry out between waterings."

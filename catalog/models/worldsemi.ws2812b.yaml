@@ -1,0 +1,11 @@
+kind: Model
+id: worldsemi.ws2812b
+name: "Worldsemi WS2812B RGB LED strip"
+implements: [indicator.led_strip]
+interface: { bus: led_data, supply_v: [5, 5] }
+channels: rgb
+color_order: GRB
+drivers:
+  - { runtime: esphome, platform: esp32_rmt_led_strip, status: untested }
+  - { runtime: sim, status: verified }
+notes: "No white channel: W is mixed into RGB."

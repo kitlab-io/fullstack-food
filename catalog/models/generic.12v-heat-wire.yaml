@@ -1,0 +1,8 @@
+kind: Model
+id: generic.12v-heat-wire
+name: "12 V heat wire"
+implements: [actuator.heater]
+interface: { bus: gpio, supply_v: [12, 12], switched_by: mosfet }
+drivers:
+  - { runtime: esphome, platform: gpio switch, status: untested }
+  - { runtime: sim, status: verified }

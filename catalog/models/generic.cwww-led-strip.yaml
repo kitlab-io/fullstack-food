@@ -1,0 +1,8 @@
+kind: Model
+id: generic.cwww-led-strip
+name: "12 V CW/WW LED strip"
+implements: [actuator.grow_light]
+interface: { bus: pwm, supply_v: [12, 12], switched_by: mosfet }
+drivers:
+  - { runtime: esphome, platform: cwww light, status: untested }
+  - { runtime: sim, status: verified }
