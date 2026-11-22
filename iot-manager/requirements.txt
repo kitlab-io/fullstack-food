@@ -5,7 +5,6 @@ async-timeout==5.0.1
 blinker==1.9.0
 certifi==2025.1.31
 click==8.1.8
-codemcp @ git+https://github.com/ezyang/codemcp@25a724ddba7091a669cc39e2f0540a542eb21470
 EditorConfig==0.17.0
 execnet==2.1.1
 Flask==3.1.0

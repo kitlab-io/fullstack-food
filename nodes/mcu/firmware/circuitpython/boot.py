@@ -12,8 +12,8 @@ esp.osdebug(None)
 import gc
 gc.collect()
 
-ssid = 'REMOVED'
-password = 'REMOVED'
+# Copy wifi_secrets.example.py to wifi_secrets.py (gitignored) and fill it in.
+from wifi_secrets import WIFI_SSID as ssid, WIFI_PASSWORD as password
 
 station = network.WLAN(network.STA_IF)
 

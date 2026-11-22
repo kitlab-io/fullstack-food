@@ -7,7 +7,7 @@
     - POST
     - PUT
     local_only: true
-    webhook_id: REMOVED
+    webhook_id: !secret plantcam_webhook_id
   conditions: []
   actions:
   - action: camera.snapshot
@@ -15,5 +15,5 @@
     data:
       filename: /home/fullstackfood/esphome/plantcam.jpg
     target:
-      device_id: REMOVED
+      device_id: !secret plantcam_device_id
   mode: single

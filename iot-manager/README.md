@@ -31,7 +31,7 @@ admin/dev services:
 # set working directory
 cd iot-manager
 # set PYTHONPATH
-export PYTHONPATH="/Users/michael.garrido/Documents/GitHub/kitlab-io/fullstack-food/iot-manager":$PYTHONPATH
+export PYTHONPATH="$(pwd)":$PYTHONPATH
 
 # activate virutal environment
 source .venv/bin/activate

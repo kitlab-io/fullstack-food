@@ -16,16 +16,16 @@ Create virtualenv in /srv/iot-manager
 In virtualenv in  /srv/iot-manager
 pip3 install -r iot-manager/requirements.txt
 
-## Developer Setup: Coding Copilot
-With Claude Desktop, setup codemcp tool
-https://github.com/ezyang/codemcp
+## Developer setup
 
-See /developer for sample files:
-- .zshenv
-- developer/claude_desktop_config.json
+```bash
+uv sync          # install dev tools (ruff, pytest)
+just lint        # same checks CI runs
+```
 
-example of working codemcp server
-https://claude.ai/share/676df031-86b6-4632-ae4a-6d3c16b09f21
+Secrets never go in tracked files. Put local values in `sites/local/secrets.yaml`
+(gitignored); see `AGENTS.md` for conventions and `docs/plan/restructure-plan.md`
+for where the repo is heading.
 
 ## Use
 To interact with sensors via Circuitpython librarires:
@@ -42,7 +42,8 @@ cat 28-000000bdcab7/temperature
 
 To capture camera snapshots via Home Assistant automations:
 Make POST request to Home Assistant automation webhook per automations.yaml
-ex. http://192.168.x.x:8123/api/webhook/REMOVED
+ex. `http://<home-assistant-host>:8123/api/webhook/<plantcam_webhook_id>`
+(the webhook id is set in Home Assistant `secrets.yaml`, see `homeassistant/.homeassistant/secrets.example.yaml`)
 
 Image saved to actions > action:camera.snapshot > media > file
 ex. /home/fullstackfood/esphome/plantcam.jpg
