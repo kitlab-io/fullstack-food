@@ -1,0 +1,154 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Hub state",
+  "description": "fsf/<site>/hub/state (retained). Republished when anything but t and tick_ms changes, and every few minutes.",
+  "type": "object",
+  "properties": {
+    "t": {
+      "type": "string"
+    },
+    "version": {
+      "type": "string"
+    },
+    "started_at": {
+      "type": "string"
+    },
+    "tick_ms": {
+      "type": "number",
+      "description": "Wall-clock time the last control tick took"
+    },
+    "plantings": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "zone": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "recipe": {
+            "type": "string"
+          },
+          "stage": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "stage_index": {
+            "type": "integer"
+          },
+          "stage_started_at": {
+            "type": "string"
+          },
+          "ready": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "zone",
+          "recipe",
+          "stage",
+          "stage_index",
+          "stage_started_at",
+          "ready"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "actuators": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "on": {
+            "type": "boolean"
+          },
+          "level": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "lease_until": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "busy_until": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "locked_until": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "on",
+          "level",
+          "lease_until",
+          "busy_until",
+          "locked_until"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "paused": {
+      "type": "object",
+      "description": "zone -> resume time, or null for until resumed",
+      "additionalProperties": {
+        "type": [
+          "string",
+          "null"
+        ]
+      }
+    },
+    "overrides": {
+      "type": "object",
+      "description": "zone -> quantity -> overridden band values and expiry",
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": {
+          "type": "object",
+          "properties": {
+            "min": {
+              "type": "number"
+            },
+            "target": {
+              "type": "number"
+            },
+            "max": {
+              "type": "number"
+            },
+            "until": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "until"
+          ],
+          "additionalProperties": false
+        }
+      }
+    }
+  },
+  "required": [
+    "t",
+    "version",
+    "started_at",
+    "tick_ms",
+    "plantings",
+    "actuators",
+    "paused",
+    "overrides"
+  ],
+  "additionalProperties": false
+}

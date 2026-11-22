@@ -1,7 +1,23 @@
 # Web dashboard plan
 
-Status: proposal (2026-11-22). Nothing here is built. It builds on the hub, simulator and
+Status (2026-11-22): the recommended options in section 9 are accepted. Phase D1 is built
+and covered by scenario tests; D2 to D5 are not started. It builds on the hub, simulator and
 MQTT contract described in `AGENTS.md`.
+
+How D1 differs from the text below:
+
+- The decision trace stores a row when a loop's decision changes (want, action or reason),
+  not one per tick. The reading and setpoint at that moment are stored with it.
+- `water_now` skips the trigger and `min_interval` (otherwise it could rarely do anything)
+  but keeps the reservoir interlock and `max_daily_ml`, cannot exceed the recipe's own dose,
+  and counts towards the interval and cap of later automatic doses.
+- An override applies to one target band of the current stage and is dropped when the
+  stage advances. `clear_override` was added.
+- The command log is trimmed together with the decision trace.
+- "Database size stays bounded" is tested for the detailed tables; rollups and events grow
+  slowly by design.
+- The mock stack's database is `/data/mock.db` on the `mock-data` volume, emptied at each
+  start (`--reset-db`).
 
 ## 1. Goals
 

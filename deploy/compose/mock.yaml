@@ -3,9 +3,12 @@
 #   FSF_SPEED  simulated seconds per real second       (default 120: one day every 12 minutes)
 services:
   hub:
-    # Simulated time restarts with every run, so keep the hub's history in memory.
+    # Simulated time restarts with every run, so the hub starts each run with an empty
+    # database. It is a file on its own volume so other containers can read it.
     command: ["python", "-m", "fsf_hub", "--site", "sites/examples/${FSF_SITE:-houseplants}",
-              "--mqtt-host", "broker", "--db", ":memory:", "--clock", "bus"]
+              "--mqtt-host", "broker", "--db", "/data/mock.db", "--reset-db", "--clock", "bus"]
+    volumes:
+      - mock-data:/data
 
   sim:
     build:
@@ -16,3 +19,6 @@ services:
     depends_on:
       broker:
         condition: service_healthy
+
+volumes:
+  mock-data:

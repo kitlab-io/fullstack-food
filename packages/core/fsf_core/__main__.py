@@ -14,6 +14,7 @@ def main(argv: list[str] | None = None) -> int:
     sub = parser.add_subparsers(dest="command", required=True)
     validate = sub.add_parser("validate", help="validate the catalog and site files")
     validate.add_argument("sites", nargs="*", help="site directories or files (default: sites/examples/*)")
+    validate.add_argument("--pins", action="store_true", help="also propose pins for devices that have none assigned")
     args = parser.parse_args(argv)
 
     root = find_repo_root(Path.cwd())
@@ -32,6 +33,13 @@ def main(argv: list[str] | None = None) -> int:
         try:
             site = load_site(path, catalog)
             print(f"site {site.id}: ok ({len(site.devices)} devices, {len(site.zones)} zones, {len(site.plantings)} plantings)")
+            for warning in site.warnings:
+                print(f"  warning: {warning}")
+            if args.pins:
+                for device_id, pins in site.pin_proposals.items():
+                    print(f"  propose: {device_id}: pins: {{ {', '.join(f'{s}: {p}' for s, p in pins.items())} }}")
+                for line in site.pin_unassigned:
+                    print(f"  no pin: {line}")
         except ConfigError as err:
             failed = True
             print(f"site {path}: INVALID")

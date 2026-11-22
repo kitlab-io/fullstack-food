@@ -8,6 +8,7 @@ threads of its own, which is what lets tests run it against a virtual clock.
 from __future__ import annotations
 
 import json
+import time
 import uuid
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
@@ -25,6 +26,9 @@ HIGH_STATUS = {"air_temperature": "too_hot", "soil_temperature": "too_hot",
 DEFAULT_MIN_OFF = 60.0
 STATUS_REPUBLISH = 300.0
 DEBOUNCE_GAP = 150.0
+RETAIN_EVERY = 3600.0
+TEST_PULSE_DEFAULT = 2.0
+TEST_PULSE_MAX = 10.0
 
 
 @dataclass
@@ -48,7 +52,14 @@ class ActuatorState:
     off_since: datetime | None = None
     lease_until: datetime | None = None
     locked_until: datetime | None = None    # forced off after hitting max_on
-    busy_until: datetime | None = None      # a timed dose is running
+    busy_until: datetime | None = None      # a timed dose or test pulse is running
+
+    def dump(self, now: datetime) -> dict:
+        def future(t: datetime | None) -> str | None:
+            return t.isoformat() if t and t > now else None
+        return {"on": self.commanded_on or future(self.busy_until) is not None, "level": self.level,
+                "lease_until": future(self.lease_until), "busy_until": future(self.busy_until),
+                "locked_until": future(self.locked_until)}
 
 
 class Hub:
@@ -70,6 +81,16 @@ class Hub:
         self.plantings: dict[str, PlantingState] = {}
         self.zone_status: dict[str, dict] = {}
         self.started_at: datetime | None = None
+        self.decisions: dict[tuple[str, str, str], dict] = {}   # (zone, loop, device) -> latest decision
+        self.paused: dict[str, str | None] = {}                 # zone -> resume time (ISO) or None for "until resumed"
+        self.overrides: dict[str, dict[str, dict]] = {}         # zone -> quantity -> {"values": {...}, "until": ISO}
+        self.tick_ms = 0.0
+        self._retained_at: datetime | None = None
+        self._state_sent: tuple[str, datetime] | None = None
+        self._commands = {"advance_stage": self._cmd_advance_stage, "water_now": self._cmd_water_now,
+                          "set_override": self._cmd_set_override, "clear_override": self._cmd_clear_override,
+                          "pause_zone": self._cmd_pause_zone, "resume_zone": self._cmd_resume_zone,
+                          "actuator_test": self._cmd_actuator_test}
 
     # ------------------------------------------------------------------ lifecycle
 
@@ -87,8 +108,11 @@ class Hub:
                 self.store.event(now, "planting_started", zone=planting.zone, planting=planting.id,
                                  recipe=planting.recipe["id"], layers=planting.recipe["layers"])
             self.plantings[planting.id] = state
+        self.paused = {z: until for z, until in self.store.get_setting("paused", {}).items() if z in self.site.zones}
+        self.overrides = {z: o for z, o in self.store.get_setting("overrides", {}).items() if z in self.site.zones}
         sid = self.site.id
         self.bus.subscribe(f"{topics.ROOT}/{sid}/+/+/state", self._on_state)
+        self.bus.subscribe(f"{topics.ROOT}/{sid}/+/+/ack", self._on_ack)
         self.bus.subscribe(f"{topics.ROOT}/{sid}/+/status", self._on_node_status)
         self.bus.subscribe(topics.hub_cmd(sid), self._on_hub_cmd)
 
@@ -125,13 +149,42 @@ class Hub:
                     self._act[dev.id].lease_until = None
             self._led_sent = {k: v for k, v in self._led_sent.items() if self.site.devices[k].node != node}
 
+    def _on_ack(self, topic: str, payload: bytes) -> None:
+        device_id = topic.split("/")[3]
+        if device_id not in self.site.devices:
+            return
+        ack = json.loads(payload)
+        now = self.clock.now()
+        known = self.store.ack(now, ack.get("id", ""), bool(ack.get("ok")), ack.get("error"))
+        if known and not ack.get("ok"):
+            self.store.event(now, "command_failed", level="warn", device=device_id, command_id=ack["id"],
+                             error=ack.get("error"))
+
     def _on_hub_cmd(self, topic: str, payload: bytes) -> None:
-        cmd = json.loads(payload)
-        if cmd.get("name") == "advance_stage":
+        """Run an operator command and answer on the reply topic with the same id."""
+        now = self.clock.now()
+        cmd: dict = {}
+        reply: dict = {"id": "", "name": "", "t": now.isoformat(), "ok": False}
+        try:
             try:
-                self.advance_stage(cmd["planting"])
-            except (KeyError, ValueError) as err:
-                self.store.event(self.clock.now(), "command_rejected", command=cmd, error=str(err))
+                cmd = json.loads(payload)
+            except ValueError:
+                raise ValueError("payload is not JSON") from None
+            if not isinstance(cmd, dict):
+                cmd = {}
+                raise ValueError("payload must be a JSON object")
+            reply["id"], reply["name"] = str(cmd.get("id", "")), str(cmd.get("name", ""))
+            handler = self._commands.get(reply["name"])
+            if handler is None:
+                raise ValueError(f"unknown command {cmd.get('name')!r}")
+            reply["result"] = handler(cmd)
+            reply["ok"] = True
+            self.store.event(now, "command", zone=cmd.get("zone"), planting=cmd.get("planting"),
+                             command=cmd, by=cmd.get("by"), result=reply["result"])
+        except ValueError as err:
+            reply["error"] = str(err)
+            self.store.event(now, "command_rejected", command=cmd, by=cmd.get("by"), error=str(err))
+        self.bus.publish(topics.hub_reply(self.site.id), reply)
 
     # ------------------------------------------------------------------ operator actions
 
@@ -140,21 +193,230 @@ class Hub:
 
         Returns the new stage id, or None when the planting is finished and its zone freed.
         """
+        if planting_id not in self.plantings:
+            raise ValueError(f"unknown planting {planting_id!r}")
         state = self.plantings[planting_id]
         if state.zone is None:
             raise ValueError(f"planting {planting_id} is already finished")
         return self._advance(self.site.plantings[planting_id], state, self.clock.now(), by="operator")
 
+    def water_now(self, zone_id: str, volume_ml: float | None = None, loop_id: str | None = None) -> dict:
+        """Give one dose now, without waiting for the trigger or the minimum interval.
+
+        The reservoir interlock and the daily cap still apply, the volume cannot exceed the
+        recipe's own dose, and the dose counts towards the interval and cap of later
+        automatic doses.
+        """
+        now = self.clock.now()
+        self._check_zone(zone_id)
+        if zone_id in self.paused:
+            raise ValueError(f"zone {zone_id} is paused")
+        planting_id = next((pid for pid, s in self.plantings.items() if s.zone == zone_id), None)
+        stage = self.stage_of(planting_id) if planting_id else None
+        loops = [lp for lp in (stage["control"] if stage else [])
+                 if lp["strategy"] == "dose" and loop_id in (None, lp["id"])]
+        if not loops:
+            wanted = f"dose loop {loop_id!r}" if loop_id else "dose loop"
+            raise ValueError(f"zone {zone_id} has no {wanted} in its current stage")
+        loop = loops[0]
+        full = float(loop["dose"]["volume_ml"])
+        volume = full if volume_ml is None else float(volume_ml)
+        if not 0 < volume <= full:
+            raise ValueError(f"volume_ml must be above 0 and at most the recipe dose of {full:g} ml")
+        dev = self.site.zone_devices(zone_id, role=loop["actuator"])[0]
+        act = self._act.setdefault(dev.id, ActuatorState())
+        readings, _ = self._readings(zone_id, now)
+        if self._reservoir_low(readings):
+            raise ValueError("blocked: reservoir_low")
+        if self._node_online.get(dev.node) is False:
+            raise ValueError(f"blocked: node {dev.node} is offline")
+        if act.busy_until is not None and now < act.busy_until:
+            raise ValueError("blocked: a dose is already running")
+        used, cap = self._dosed_today(zone_id, loop, now), loop.get("limits", {}).get("max_daily_ml")
+        if cap is not None and used + volume > cap:
+            raise ValueError(f"blocked: max_daily_ml ({used:g} of {cap:g} ml used in the last 24 h)")
+        duration = self._dose(zone_id, self.plantings[planting_id], loop, dev, volume, now, by="operator")
+        self._trace(zone_id, loop["id"], dev, True, "on", f"operator dose of {volume:g} ml", {"volume_ml": volume}, now)
+        return {"device": dev.id, "volume_ml": volume, "duration_s": duration}
+
+    def set_override(self, zone_id: str, quantity: str, duration: str | float, target: float | None = None,
+                     min: float | None = None, max: float | None = None) -> dict:
+        """Replace parts of one target band of the zone's current stage until the override expires."""
+        now = self.clock.now()
+        self._check_zone(zone_id)
+        planting_id = next((pid for pid, s in self.plantings.items() if s.zone == zone_id), None)
+        stage = self.stage_of(planting_id) if planting_id else None
+        if not stage or quantity not in stage["targets"]:
+            raise ValueError(f"zone {zone_id} has no target for {quantity!r} in its current stage")
+        values = {k: float(v) for k, v in (("min", min), ("target", target), ("max", max)) if v is not None}
+        if not values:
+            raise ValueError("give at least one of target, min, max")
+        band = {**stage["targets"][quantity], **values}
+        ordered = [band[k] for k in ("min", "target", "max") if k in band]
+        if ordered != sorted(ordered):
+            raise ValueError(f"override would give an inconsistent band {band}")
+        length = seconds(duration)
+        if length <= 0:
+            raise ValueError("duration must be above 0")
+        until = (now + timedelta(seconds=length)).isoformat()
+        self.overrides.setdefault(zone_id, {})[quantity] = {"values": values, "until": until}
+        self.store.set_setting("overrides", self.overrides)
+        return {"quantity": quantity, "band": band, "until": until}
+
+    def clear_override(self, zone_id: str, quantity: str | None = None, reason: str = "operator") -> list[str]:
+        self._check_zone(zone_id)
+        current = self.overrides.get(zone_id, {})
+        cleared = [q for q in list(current) if quantity in (None, q)]
+        for q in cleared:
+            del current[q]
+        if not current:
+            self.overrides.pop(zone_id, None)
+        if cleared:
+            self.store.set_setting("overrides", self.overrides)
+            if reason != "operator":
+                self.store.event(self.clock.now(), "override_cleared", zone=zone_id, quantities=cleared, reason=reason)
+        return cleared
+
+    def pause_zone(self, zone_id: str, duration: str | float | None = None) -> dict:
+        """Stop controlling a zone: every actuator off, nothing switched until it is resumed."""
+        now = self.clock.now()
+        self._check_zone(zone_id)
+        until = (now + timedelta(seconds=seconds(duration))).isoformat() if duration is not None else None
+        self.paused[zone_id] = until
+        self.store.set_setting("paused", self.paused)
+        for dev in self.site.zone_devices(zone_id, cls="actuator"):
+            act = self._act.setdefault(dev.id, ActuatorState())
+            if act.busy_until is not None and now < act.busy_until:     # stop a dose in progress
+                self._send(dev, {"name": "off"})
+                act.busy_until = None
+            self._drive(dev, False, None, {}, now)
+        return {"until": until}
+
+    def resume_zone(self, zone_id: str, reason: str = "operator") -> None:
+        self._check_zone(zone_id)
+        if zone_id not in self.paused:
+            raise ValueError(f"zone {zone_id} is not paused")
+        del self.paused[zone_id]
+        self.store.set_setting("paused", self.paused)
+        if reason != "operator":
+            self.store.event(self.clock.now(), "zone_resumed", zone=zone_id, reason=reason)
+
+    def actuator_test(self, device_id: str, duration_s: float = TEST_PULSE_DEFAULT) -> dict:
+        """Switch one actuator on for a few seconds (a normal leased command) for commissioning."""
+        now = self.clock.now()
+        dev = self.site.devices.get(device_id)
+        if dev is None or dev.cls != "actuator":
+            raise ValueError(f"{device_id!r} is not an actuator of this site")
+        duration = float(duration_s)
+        if not 0 < duration <= TEST_PULSE_MAX:
+            raise ValueError(f"duration_s must be above 0 and at most {TEST_PULSE_MAX:g}")
+        act = self._act.setdefault(dev.id, ActuatorState())
+        if self._node_online.get(dev.node) is False:
+            raise ValueError(f"blocked: node {dev.node} is offline")
+        if act.commanded_on or (act.busy_until is not None and now < act.busy_until):
+            raise ValueError(f"blocked: {device_id} is already on")
+        if "actuator.pump" in dev.roles and any(self._reservoir_low(self._readings(z, now)[0])
+                                                for z in self.site.zones_of_device(dev.id)):
+            raise ValueError("blocked: reservoir_low")
+        self._send(dev, {"name": "on", "duration_s": duration})
+        act.busy_until = now + timedelta(seconds=duration)
+        self.store.event(now, "actuator_test", device=dev.id, duration_s=duration)
+        return {"device": dev.id, "duration_s": duration}
+
+    def _check_zone(self, zone_id: str) -> None:
+        if zone_id not in self.site.zones:
+            raise ValueError(f"unknown zone {zone_id!r}")
+
+    @staticmethod
+    def _arg(cmd: dict, key: str, kind=str, required: bool = True):
+        value = cmd.get(key)
+        if value is None:
+            if required:
+                raise ValueError(f"{key} is required")
+            return None
+        if kind is float:
+            if isinstance(value, bool) or not isinstance(value, (int, float)):
+                raise ValueError(f"{key} must be a number")
+            return float(value)
+        if not isinstance(value, kind):
+            raise ValueError(f"{key} must be a {'string' if kind is str else kind.__name__}")
+        return value
+
+    def _cmd_advance_stage(self, cmd: dict):
+        return {"stage": self.advance_stage(self._arg(cmd, "planting"))}
+
+    def _cmd_water_now(self, cmd: dict):
+        return self.water_now(self._arg(cmd, "zone"), self._arg(cmd, "volume_ml", float, required=False),
+                              self._arg(cmd, "loop", required=False))
+
+    def _cmd_set_override(self, cmd: dict):
+        return self.set_override(self._arg(cmd, "zone"), self._arg(cmd, "quantity"), self._arg(cmd, "duration"),
+                                 **{k: self._arg(cmd, k, float, required=False) for k in ("target", "min", "max")})
+
+    def _cmd_clear_override(self, cmd: dict):
+        return {"cleared": self.clear_override(self._arg(cmd, "zone"), self._arg(cmd, "quantity", required=False))}
+
+    def _cmd_pause_zone(self, cmd: dict):
+        return self.pause_zone(self._arg(cmd, "zone"), self._arg(cmd, "duration", required=False))
+
+    def _cmd_resume_zone(self, cmd: dict):
+        return self.resume_zone(self._arg(cmd, "zone"))
+
+    def _cmd_actuator_test(self, cmd: dict):
+        duration = self._arg(cmd, "duration_s", float, required=False)
+        return self.actuator_test(self._arg(cmd, "device"), TEST_PULSE_DEFAULT if duration is None else duration)
+
     # ------------------------------------------------------------------ tick
 
     def tick(self) -> None:
+        began = time.perf_counter()
         now = self.clock.now()
+        self._expire(now)
         for planting in self.site.plantings.values():
             self._progress(planting, self.plantings[planting.id], now)
         occupants = {s.zone: pid for pid, s in self.plantings.items() if s.zone}
         for zone_id in self.site.zones:
             self._run_zone(zone_id, occupants.get(zone_id), now)
         self._render_leds(now)
+        if self._retained_at is None or (now - self._retained_at).total_seconds() >= RETAIN_EVERY:
+            self.store.retain(now, **self.site.retention)
+            self._retained_at = now
+        self.tick_ms = (time.perf_counter() - began) * 1000
+        self._publish_state(now)
+
+    def _expire(self, now: datetime) -> None:
+        """Lift pauses and overrides whose time is up."""
+        for zone_id, until in list(self.paused.items()):
+            if until is not None and now >= datetime.fromisoformat(until):
+                self.resume_zone(zone_id, reason="expired")
+        for zone_id, by_quantity in list(self.overrides.items()):
+            done = [q for q, o in by_quantity.items() if now >= datetime.fromisoformat(o["until"])]
+            for quantity in done:
+                self.clear_override(zone_id, quantity, reason="expired")
+
+    def state(self, now: datetime) -> dict:
+        """Everything a dashboard needs to start without replaying history."""
+        plantings = {}
+        for pid, st in self.plantings.items():
+            stage = self.stage_of(pid)
+            plantings[pid] = {"zone": st.zone, "recipe": self.site.plantings[pid].recipe["id"],
+                              "stage": stage["id"] if stage else None, "stage_index": st.stage_index,
+                              "stage_started_at": st.stage_started_at.isoformat(), "ready": st.ready}
+        actuators = {d.id: self._act.get(d.id, ActuatorState()).dump(now)
+                     for d in self.site.devices.values() if d.cls == "actuator"}
+        return {"t": now.isoformat(), "version": VERSION, "started_at": self.started_at.isoformat(),
+                "tick_ms": round(self.tick_ms, 2), "plantings": plantings, "actuators": actuators,
+                "paused": dict(self.paused),
+                "overrides": {z: {q: {**o["values"], "until": o["until"]} for q, o in by_q.items()}
+                              for z, by_q in self.overrides.items()}}
+
+    def _publish_state(self, now: datetime) -> None:
+        state = self.state(now)
+        signature = json.dumps({k: v for k, v in state.items() if k not in ("t", "tick_ms")}, sort_keys=True)
+        sent = self._state_sent
+        if sent is None or sent[0] != signature or (now - sent[1]).total_seconds() >= STATUS_REPUBLISH:
+            self.bus.publish(topics.hub_state(self.site.id), state, retain=True)
+            self._state_sent = (signature, now)
 
     # ------------------------------------------------------------------ stages
 
@@ -186,6 +448,7 @@ class Hub:
         stages = planting.recipe["stages"]
         old_zone, old_stage = state.zone, stages[state.stage_index]["id"]
         if state.stage_index + 1 >= len(stages):
+            self.clear_override(old_zone, reason="planting_finished")
             state.zone, state.ready = None, False
             self.store.save_planting(planting.id, state.dump())
             self.store.event(now, "planting_finished", zone=old_zone, planting=planting.id, by=by)
@@ -202,6 +465,7 @@ class Hub:
             if not free:
                 raise ValueError(f"no free zone with role {role!r} for stage {nxt['id']}")
             new_zone = free[0]
+        self.clear_override(old_zone, reason="stage_advanced")     # the next stage has its own targets
         state.stage_index += 1
         state.stage_started_at, state.zone, state.ready = now, new_zone, False
         self._debounce = {k: v for k, v in self._debounce.items() if k[1] != planting.id}
@@ -264,18 +528,23 @@ class Hub:
         actuators = {d.id: d for d in self.site.zone_devices(zone_id, cls="actuator")}
         offline = any(self._node_online.get(d.node) is False
                       for d in self.site.zone_devices(zone_id) if d.cls != "indicator")
-        level = readings.get("water_level")
-        reservoir_low = level is not None and level < self.site.safety["reservoir_min_percent"]
+        reservoir_low = self._reservoir_low(readings)
+        paused = zone_id in self.paused
         active: set[str] = set()
         if offline:
             active.add("offline")
+        if paused:
+            active.add("paused")
 
-        stage = self.stage_of(planting_id) if planting_id else None
+        stage = self._with_overrides(zone_id, self.stage_of(planting_id)) if planting_id else None
         handled: set[str] = set()
         if stage:
             state = self.plantings[planting_id]
             for loop in stage["control"]:
                 for dev in self.site.zone_devices(zone_id, role=loop["actuator"]):
+                    if paused:      # left unhandled, so it is held off below
+                        self._trace(zone_id, loop["id"], dev, False, "off", "paused", {}, now)
+                        continue
                     handled.add(dev.id)
                     self._run_loop(zone_id, state, stage, loop, dev, readings, reservoir_low, now)
             active |= self._target_statuses(zone_id, stage, readings, stale, now)
@@ -288,7 +557,7 @@ class Hub:
                 self._drive(dev, False, None, {}, now)
 
         if not stage:
-            top = "offline" if offline else "idle"
+            top = "offline" if offline else "paused" if paused else "idle"
         else:
             top = self._top_status(active)
         status = {"t": now.isoformat(), "state": top, "active": sorted(active),
@@ -304,6 +573,38 @@ class Hub:
         if sent is None or sent[0] != signature or (now - sent[1]).total_seconds() >= STATUS_REPUBLISH:
             self.bus.publish(topics.zone_status(self.site.id, zone_id), status, retain=True)
             self._status_sent[zone_id] = (signature, now)
+
+    def _reservoir_low(self, readings: dict) -> bool:
+        level = readings.get("water_level")
+        return level is not None and level < self.site.safety["reservoir_min_percent"]
+
+    def _with_overrides(self, zone_id: str, stage: dict | None) -> dict | None:
+        """The stage with any active operator overrides merged into its target bands."""
+        overrides = self.overrides.get(zone_id)
+        if not stage or not overrides:
+            return stage
+        targets = {q: {**band, **overrides[q]["values"]} if q in overrides else band
+                   for q, band in stage["targets"].items()}
+        return {**stage, "targets": targets}
+
+    def _trace(self, zone_id: str, loop_id: str, dev: Device, want: bool, action: str, reason: str,
+               inputs: dict, now: datetime) -> None:
+        """Record why a loop is doing what it is doing.
+
+        A row is stored only when the decision changes (want, action or reason), so reasons
+        must not contain values that move every tick; those go in `inputs`.
+        """
+        key = (zone_id, loop_id, dev.id)
+        last = self.decisions.get(key)
+        changed = last is None or (last["want"], last["action"], last["reason"]) != (want, action, reason)
+        self.decisions[key] = {"t": last["t"] if last and not changed else now, "want": want, "action": action,
+                               "reason": reason, "inputs": inputs}
+        if changed:
+            self.store.decision(now, zone_id, loop_id, dev.id, want, action, reason, inputs)
+
+    def _hhmm(self, t: datetime, now: datetime) -> str:
+        local = t.astimezone(self._tz)
+        return local.strftime("%H:%M" if local.date() == now.astimezone(self._tz).date() else "%Y-%m-%d %H:%M")
 
     def _target_statuses(self, zone_id: str, stage: dict, readings: dict, stale: set, now: datetime) -> set[str]:
         hold = self.site.safety["status_hold"]
@@ -350,8 +651,11 @@ class Hub:
             self._run_dose(zone_id, state, loop, dev, readings, reservoir_low, now)
             return
         if strategy == "hysteresis":
-            value = readings.get(loop["quantity"])
-            target, band = stage["targets"][loop["quantity"]]["target"], loop.get("band", 1)
+            quantity = loop["quantity"]
+            value = readings.get(quantity)
+            target, band = stage["targets"][quantity]["target"], loop.get("band", 1)
+            inputs = {"quantity": quantity, "value": value, "target": target, "band": band}
+            was = self._latch.get(key, False)
             if value is None:
                 self._latch[key] = False        # fail safe: no trusted reading, no actuation
             elif loop["direction"] == "raise":
@@ -365,29 +669,70 @@ class Hub:
                 elif value <= target:
                     self._latch[key] = False
             want = self._latch.get(key, False)
+            last = self.decisions.get((zone_id, loop["id"], dev.id))
+            if value is None:
+                why = "fail-safe: reading stale"
+            elif want != was:
+                side = "below" if loop["direction"] == "raise" else "above"
+                why = f"want on: {quantity} {side} target band" if want else f"want off: {quantity} reached target"
+            elif last and last["want"] == want and last["inputs"].get("why", "").startswith("want"):
+                why = last["inputs"]["why"]     # still for the reason that switched it
+            else:
+                why = f"want {'on' if want else 'off'}: {quantity} inside target band"
         elif strategy == "duty_cycle":
             phase = (now - state.stage_started_at).total_seconds() % seconds(loop["every"])
             want = phase < seconds(loop["on_for"])
+            inputs = {"on_for": loop["on_for"], "every": loop["every"]}
+            why = f"want {'on' if want else 'off'}: duty cycle {loop['on_for']} every {loop['every']}"
             extra = loop.get("also_when")
             if extra:
                 value = readings.get(extra["quantity"])
+                inputs.update(quantity=extra["quantity"], value=value, above=extra["above"])
                 if value is None:
                     self._latch[key] = False
                 elif value > extra["above"]:
                     self._latch[key] = True
                 elif value < extra.get("until_below", extra["above"]):
                     self._latch[key] = False
-                want = want or self._latch.get(key, False)
+                if not want and self._latch.get(key, False):
+                    want, why = True, f"want on: {extra['quantity']} above {extra['above']:g}"
         else:  # schedule
             local = now.astimezone(self._tz)
             start_h, start_m = (int(x) for x in loop["on_at"].split(":"))
             minutes = (local.hour * 60 + local.minute - (start_h * 60 + start_m)) % 1440
             want = minutes < loop["hours"] * 60
-        self._drive(dev, want, loop.get("level"), limits, now)
+            inputs = {"on_at": loop["on_at"], "hours": loop["hours"]}
+            why = f"want {'on' if want else 'off'}: schedule {loop['on_at']} for {loop['hours']:g} h"
+        blocked = self._drive(dev, want, loop.get("level"), limits, now)
+        act = self._act[dev.id]
+        self._trace(zone_id, loop["id"], dev, want, "on" if act.commanded_on else "off", blocked or why,
+                    {**inputs, "why": why}, now)
+
+    def _dosed_today(self, zone_id: str, loop: dict, now: datetime) -> float:
+        return sum(e["volume_ml"] for e in self.store.events("dose", zone=zone_id, since=now - timedelta(hours=24))
+                   if e["loop"] == loop["id"])
+
+    def _dose(self, zone_id: str, state: PlantingState, loop: dict, dev: Device, volume: float, now: datetime,
+              by: str) -> float:
+        act = self._act.setdefault(dev.id, ActuatorState())
+        duration = round(volume / dev.raw["flow_ml_per_s"], 1)
+        self._send(dev, {"name": "on", "duration_s": duration})
+        act.busy_until = now + timedelta(seconds=duration)
+        self._debounce.pop(("dose", state.id, loop["id"]), None)
+        self.store.event(now, "dose", zone=zone_id, planting=state.id, loop=loop["id"],
+                         device=dev.id, volume_ml=volume, duration_s=duration, by=by)
+        return duration
 
     def _run_dose(self, zone_id: str, state: PlantingState, loop: dict, dev: Device, readings: dict,
                   reservoir_low: bool, now: datetime) -> None:
         act = self._act.setdefault(dev.id, ActuatorState())
+        trigger = loop["trigger"]
+        inputs = {"quantity": trigger["quantity"], "value": readings.get(trigger["quantity"]),
+                  **{k: trigger[k] for k in ("below", "above", "for") if k in trigger}}
+
+        def trace(want: bool, action: str, reason: str) -> None:
+            self._trace(zone_id, loop["id"], dev, want, action, reason, inputs, now)
+
         running = act.busy_until is not None and now < act.busy_until
         if reservoir_low:
             if running:     # stop a dose in progress rather than run the pump dry
@@ -395,27 +740,28 @@ class Hub:
                 act.busy_until = None
                 self.store.event(now, "interlock", zone=zone_id, loop=loop["id"], reason="reservoir_low", stopped=True)
             self._debounce.pop(("dose", state.id, loop["id"]), None)
-            return
-        if running or self._node_online.get(dev.node) is False:
-            return
-        if not self._condition(("dose", state.id, loop["id"]), loop["trigger"], readings, now):
-            return
+            return trace(False, "off", "blocked: reservoir_low")
+        if running:
+            return trace(True, "on", "dose running")
+        if self._node_online.get(dev.node) is False:
+            return trace(False, "off", f"blocked: node {dev.node} offline")
+        if not self._condition(("dose", state.id, loop["id"]), trigger, readings, now):
+            if inputs["value"] is None:
+                return trace(False, "off", "fail-safe: reading stale")
+            return trace(False, "off", "want off: trigger not met" + (f" for {trigger['for']}" if "for" in trigger else ""))
         limits = loop.get("limits", {})
         volume = float(loop["dose"]["volume_ml"])
-        doses = [e for e in self.store.events("dose", zone=zone_id, since=now - timedelta(hours=24))
-                 if e["loop"] == loop["id"]]
-        history = self.store.events("dose", zone=zone_id, since=now - timedelta(seconds=seconds(limits["min_interval"])))
-        if any(e["loop"] == loop["id"] for e in history):
-            return
+        interval = seconds(limits["min_interval"])
+        recent = [e for e in self.store.events("dose", zone=zone_id, since=now - timedelta(seconds=interval))
+                  if e["loop"] == loop["id"]]
+        if recent:
+            until = recent[-1]["t"] + timedelta(seconds=interval)
+            return trace(True, "off", f"blocked: min_interval until {self._hhmm(until, now)}")
         cap = limits.get("max_daily_ml")
-        if cap is not None and sum(e["volume_ml"] for e in doses) + volume > cap:
-            return
-        duration = volume / dev.raw["flow_ml_per_s"]
-        self._send(dev, {"name": "on", "duration_s": round(duration, 1)})
-        act.busy_until = now + timedelta(seconds=duration)
-        self._debounce.pop(("dose", state.id, loop["id"]), None)
-        self.store.event(now, "dose", zone=zone_id, planting=state.id, loop=loop["id"],
-                         device=dev.id, volume_ml=volume, duration_s=round(duration, 1))
+        if cap is not None and self._dosed_today(zone_id, loop, now) + volume > cap:
+            return trace(True, "off", "blocked: max_daily_ml")
+        self._dose(zone_id, state, loop, dev, volume, now, by="trigger")
+        return trace(True, "on", f"dosed {volume:g} ml")
 
     # ------------------------------------------------------------------ actuator driving
 
@@ -423,27 +769,32 @@ class Hub:
         seen = self._latest.get(dev.id)
         return seen[1].get("on") if seen else None
 
-    def _drive(self, dev: Device, want_on: bool, level: float | None, limits: dict, now: datetime) -> None:
-        """Hold a switched actuator on or off, applying max_on / min_off and renewing its lease."""
+    def _drive(self, dev: Device, want_on: bool, level: float | None, limits: dict, now: datetime) -> str | None:
+        """Hold a switched actuator on or off, applying max_on / min_off and renewing its lease.
+
+        Returns the reason when it could not do what was asked, otherwise None.
+        """
         act = self._act.setdefault(dev.id, ActuatorState())
         if self._node_online.get(dev.node) is False:
-            return
-        if act.busy_until is not None:      # a dose loop owns this device
+            return f"blocked: node {dev.node} offline"
+        if act.busy_until is not None:      # a dose or test pulse owns this device
             if now < act.busy_until:
-                return
+                return "blocked: dose or test pulse running"
             act.busy_until = None
         lease = self.site.safety["actuator_lease"]
         min_off = seconds(limits.get("min_off"), default=DEFAULT_MIN_OFF)
+        blocked = None
         if want_on:
             max_on = limits.get("max_on")
             if act.commanded_on and max_on and (now - act.on_since).total_seconds() >= seconds(max_on):
                 act.locked_until = now + timedelta(seconds=min_off)
                 self.store.event(now, "limit", device=dev.id, reason="max_on")
-                want_on = False
+                blocked = f"blocked: max_on, off until {self._hhmm(act.locked_until, now)}"
             elif act.locked_until and now < act.locked_until:
-                want_on = False
+                blocked = f"blocked: max_on, off until {self._hhmm(act.locked_until, now)}"
             elif not act.commanded_on and act.off_since and (now - act.off_since).total_seconds() < min_off:
-                want_on = False
+                blocked = f"blocked: min_off until {self._hhmm(act.off_since + timedelta(seconds=min_off), now)}"
+            want_on = blocked is None
         if want_on:
             renew = act.lease_until is None or (act.lease_until - now).total_seconds() < lease / 2
             if not act.commanded_on or renew or act.level != level:
@@ -459,9 +810,12 @@ class Hub:
             if act.commanded_on:
                 act.off_since = now
             act.commanded_on, act.on_since, act.lease_until = False, None, None
+        return blocked
 
     def _send(self, dev: Device, cmd: dict) -> None:
         cmd = {"id": uuid.uuid4().hex[:12], **cmd}
+        self.store.command(self.clock.now(), cmd["id"], dev.id, cmd["name"],
+                           {k: v for k, v in cmd.items() if k not in ("id", "name")})
         self.bus.publish(topics.device(self.site.id, dev.node, dev.id, "cmd"), cmd)
 
     # ------------------------------------------------------------------ LEDs
@@ -499,3 +853,14 @@ class Hub:
 def _zone(name: str):
     from zoneinfo import ZoneInfo
     return ZoneInfo(name)
+
+
+def _version() -> str:
+    from importlib.metadata import PackageNotFoundError, version
+    try:
+        return version("fullstack-food")
+    except PackageNotFoundError:
+        return "unknown"
+
+
+VERSION = _version()

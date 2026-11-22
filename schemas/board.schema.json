@@ -38,6 +38,47 @@
         "type": "string"
       }
     },
+    "datasheet_checked": {
+      "type": "boolean",
+      "description": "false until the pin map has been confirmed against the board's documentation"
+    },
+    "logic_v": {
+      "type": "number"
+    },
+    "adc2_blocked_by_wifi": {
+      "type": "boolean",
+      "description": "ADC2 pins cannot be read while WiFi is on"
+    },
+    "pins": {
+      "type": "object",
+      "description": "Pins broken out on the board. A pin can do digital in/out, PWM, I2C, 1-Wire and LED data unless marked otherwise.",
+      "propertyNames": {
+        "pattern": "^[A-Z0-9_]+$"
+      },
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "adc": {
+            "enum": [
+              "adc1",
+              "adc2"
+            ]
+          },
+          "input_only": {
+            "type": "boolean"
+          },
+          "reserved": {
+            "type": "string",
+            "description": "Cannot be used; says by what"
+          },
+          "caution": {
+            "type": "string",
+            "description": "Usable, but only by a person who has read this. Never proposed automatically."
+          }
+        },
+        "additionalProperties": false
+      }
+    },
     "notes": {
       "type": "string"
     }

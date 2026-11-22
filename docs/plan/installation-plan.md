@@ -1,8 +1,23 @@
 # Installation, assembly, testing and troubleshooting plan
 
-Status: proposal (2026-11-22). Nothing here is built. Today the system runs only against
-simulated nodes; this plan is the path from that to a working physical installation that
-someone else can replicate.
+Status (2026-11-22): the recommended options in section 9 are accepted. Phase I1 is built;
+I2 to I6 are not started. Today the system runs only against simulated nodes; this plan is
+the path from that to a working physical installation that someone else can replicate.
+
+How I1 stands:
+
+- The model schema has the fields of section 3, and the 14 models used by the example
+  sites are filled in, each marked `datasheet_checked: false`. `drivers[].template` is in the
+  schema but left empty until I2 can compile the snippets with ESPHome.
+- `esp32-c3-devkitm` has a pin map (also `datasheet_checked: false`). A site's `pins` are
+  checked against it; `just validate --pins` proposes pins for blanks. Strapping, USB and
+  serial pins are marked `caution`: accepted with a warning, never proposed.
+- Finding: with that pin map the house plant and microgreens builds need nine GPIOs and the
+  board has eight without a caution, so the LED strip gets no proposal. The first hardware
+  build needs a decision: a board with more pins, an I2C ADC for the soil probes, or the
+  strip on a caution pin.
+- Not done from section 3: the other four boards have no pin map, and I2C address clashes
+  are not checked.
 
 Hardware facts quoted below (pull-up values, voltage levels, sensor quirks) are from general
 experience with these parts. Each must be confirmed against the part's datasheet and on the

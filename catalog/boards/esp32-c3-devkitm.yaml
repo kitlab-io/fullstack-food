@@ -5,3 +5,24 @@ class: mcu
 runtimes: [esphome, circuitpython]
 os: []
 buses: [i2c, onewire, gpio, adc, pwm, led_data, wifi]
+# Pin facts are from general experience with this board. Confirm them against the
+# Espressif board documentation and on the bench, then set datasheet_checked: true.
+datasheet_checked: false
+logic_v: 3.3
+adc2_blocked_by_wifi: true
+pins:
+  GPIO0:  { adc: adc1 }
+  GPIO1:  { adc: adc1 }
+  GPIO2:  { adc: adc1, caution: "strapping pin: a part that pulls it low at power-up can stop the board booting" }
+  GPIO3:  { adc: adc1 }
+  GPIO4:  { adc: adc1 }
+  GPIO5:  { adc: adc2 }
+  GPIO6:  {}
+  GPIO7:  {}
+  GPIO8:  { caution: "strapping pin, and wired to the onboard RGB LED" }
+  GPIO9:  { caution: "strapping pin, and wired to the BOOT button" }
+  GPIO10: {}
+  GPIO18: { caution: "USB D-: only free when the native USB port is not used" }
+  GPIO19: { caution: "USB D+: only free when the native USB port is not used" }
+  GPIO20: { caution: "UART0 RX: shared with the USB serial bridge used for flashing and logs" }
+  GPIO21: { caution: "UART0 TX: shared with the USB serial bridge used for flashing and logs" }

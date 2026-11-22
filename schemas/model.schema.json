@@ -83,6 +83,10 @@
             "items": {
               "type": "string"
             }
+          },
+          "template": {
+            "type": "string",
+            "description": "Config snippet for this runtime with ${id} and ${pin.<signal>} placeholders. Filled in when firmware generation lands (installation plan phase I2)."
           }
         },
         "required": [
@@ -92,6 +96,229 @@
         "additionalProperties": true
       },
       "minItems": 1
+    },
+    "datasheet_checked": {
+      "type": "boolean",
+      "description": "false until pins, wiring, power and bench values have been confirmed against the datasheet and on the bench"
+    },
+    "pins": {
+      "type": "array",
+      "description": "Signals the part needs from the board. Parts switched by a smart plug or on USB have none.",
+      "items": {
+        "type": "object",
+        "properties": {
+          "signal": {
+            "type": "string",
+            "pattern": "^[a-z0-9_]+$"
+          },
+          "needs": {
+            "enum": [
+              "i2c_sda",
+              "i2c_scl",
+              "adc",
+              "digital_in",
+              "digital_out",
+              "pwm",
+              "onewire",
+              "led_data"
+            ]
+          },
+          "level_v": {
+            "type": "number",
+            "description": "Voltage the part drives this signal at, when it differs from the board's logic level"
+          },
+          "notes": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "signal",
+          "needs"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "wiring": {
+      "type": "array",
+      "description": "Support parts a correct build needs; they go on the BOM.",
+      "items": {
+        "type": "object",
+        "properties": {
+          "part": {
+            "type": "string"
+          },
+          "qty": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "purpose": {
+            "type": "string"
+          },
+          "when": {
+            "type": "string",
+            "description": "Condition, when the part is not always needed"
+          }
+        },
+        "required": [
+          "part",
+          "purpose"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "power": {
+      "type": "object",
+      "properties": {
+        "rail": {
+          "enum": [
+            "3v3",
+            "5v",
+            "12v",
+            "mains"
+          ]
+        },
+        "typical_ma": {
+          "type": "number",
+          "minimum": 0
+        },
+        "peak_ma": {
+          "type": "number",
+          "minimum": 0
+        },
+        "per": {
+          "enum": [
+            "device",
+            "led"
+          ],
+          "description": "What the currents are counted per (default device)"
+        },
+        "notes": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "rail"
+      ],
+      "additionalProperties": false
+    },
+    "calibration": {
+      "type": "object",
+      "properties": {
+        "procedure": {
+          "type": "string",
+          "pattern": "^[a-z0-9_]+$"
+        },
+        "produces": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Values the procedure writes to the device in the site file"
+        },
+        "notes": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "procedure",
+        "produces"
+      ],
+      "additionalProperties": false
+    },
+    "bench_test": {
+      "type": "object",
+      "description": "How to prove one part on the bench before it joins a node",
+      "properties": {
+        "settle_s": {
+          "type": "number",
+          "minimum": 0
+        },
+        "plausible": {
+          "type": "object",
+          "description": "quantity (or raw value before calibration) -> [low, high] expected indoors at room conditions",
+          "additionalProperties": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            },
+            "minItems": 2,
+            "maxItems": 2
+          }
+        },
+        "stimulus": {
+          "type": "string",
+          "description": "What the builder does"
+        },
+        "expect": {
+          "type": "string",
+          "description": "What must then happen"
+        },
+        "pulse_s": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "maximum": 10,
+          "description": "Actuators: length of the test pulse"
+        }
+      },
+      "required": [
+        "stimulus",
+        "expect"
+      ],
+      "additionalProperties": false
+    },
+    "troubleshooting": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "symptom": {
+            "type": "string"
+          },
+          "causes": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1
+          },
+          "checks": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1
+          }
+        },
+        "required": [
+          "symptom",
+          "causes",
+          "checks"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "safety": {
+      "type": "object",
+      "properties": {
+        "hazards": {
+          "type": "array",
+          "items": {
+            "enum": [
+              "mains",
+              "water",
+              "heat"
+            ]
+          },
+          "minItems": 1
+        },
+        "notes": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "hazards"
+      ],
+      "additionalProperties": false
     },
     "bom": {
       "type": "object"

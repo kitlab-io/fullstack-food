@@ -7,3 +7,24 @@ drivers:
   - { runtime: kasa, status: untested }
   - { runtime: esphome, platform: gpio switch (relay), status: untested }
   - { runtime: sim, status: verified }
+# Pins, wiring, power and bench values below are from general experience with this part.
+# Confirm them against the datasheet and on the bench, then set datasheet_checked: true.
+datasheet_checked: false
+wiring:
+  - { part: "certified smart plug or enclosed, rated relay module", qty: 1, purpose: "switches the mains load; no exposed mains wiring" }
+power: { rail: mains, notes: "Wattage is on the label; stay within the plug's rating." }
+bench_test:
+  pulse_s: 10
+  stimulus: "Send a 10 s test pulse with water in the tank"
+  expect: "Fog appears within a few seconds and stops after the pulse"
+troubleshooting:
+  - symptom: "On for a long time but humidity does not rise"
+    causes: ["tank empty or float switch tripped", "fan carrying the fog straight out", "chamber leaks"]
+    checks: ["Refill and check the float", "Shorten fan bursts", "Seal the chamber"]
+  - symptom: "White dust on everything"
+    causes: ["minerals in tap water"]
+    checks: ["Use distilled or demineralised water"]
+  - symptom: "Sensors read wrong after it runs"
+    causes: ["fog condensing on sensors in its path"]
+    checks: ["Move sensors out of the fog stream"]
+safety: { hazards: [mains, water], notes: "Switch only through a certified smart plug or an enclosed, rated relay. Keep the plug above and away from the water." }

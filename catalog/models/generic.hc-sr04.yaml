@@ -7,4 +7,31 @@ drivers:
   - { runtime: esphome, platform: ultrasonic, status: untested }
   - { runtime: linux, module: adafruit_hcsr04, status: bench }
   - { runtime: sim, status: verified }
+# Pins, wiring, power and bench values below are from general experience with this part.
+# Confirm them against the datasheet and on the bench, then set datasheet_checked: true.
+datasheet_checked: false
+pins:
+  - { signal: trigger, needs: digital_out }
+  - { signal: echo, needs: digital_in, level_v: 5, notes: "5 V output: divide it down before a 3.3 V pin" }
+wiring:
+  - { part: "1 kOhm resistor", qty: 1, purpose: "upper half of the echo voltage divider" }
+  - { part: "2 kOhm resistor", qty: 1, purpose: "lower half of the echo voltage divider" }
+power: { rail: 5v, typical_ma: 2, peak_ma: 15 }
+calibration:
+  procedure: level_empty_full
+  produces: [empty_cm, full_cm]
+  notes: "Distance to the surface with the reservoir empty and full."
+bench_test:
+  settle_s: 2
+  plausible: { distance_cm: [2, 400] }
+  stimulus: "Hold a flat object about 10 cm in front, then move it to about 30 cm"
+  expect: "Distance follows to within a centimetre or two"
+troubleshooting:
+  - symptom: "No reading, or always the maximum"
+    causes: ["powered from 3.3 V instead of 5 V", "trigger and echo swapped", "echo not connected through the divider"]
+    checks: ["Measure 5 V at the sensor", "Swap trigger and echo"]
+  - symptom: "Level jumps around"
+    causes: ["condensation on the transducers", "foam or ripples on the water", "echoes from the reservoir walls or the tube"]
+    checks: ["Wipe the sensor dry", "Mount it centred, pointing straight down, clear of the walls"]
+safety: { hazards: [water], notes: "Not waterproof: mount it above the highest water level, cables leaving upwards with a drip loop." }
 notes: "Measures distance to the water surface; calibration maps empty/full distance to percent. Bench script: iot-manager/devices/tests/HCRS04.py"

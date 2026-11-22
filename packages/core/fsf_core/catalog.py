@@ -16,6 +16,7 @@ import yaml
 from jsonschema import Draft202012Validator
 
 from .durations import seconds
+from .pins import check_node
 from .recipes import resolve_recipe
 
 KINDS = {
@@ -27,6 +28,12 @@ SAFETY_DEFAULTS = {
     "reservoir_min_percent": 10,   # pumps are blocked below this level
     "actuator_lease": "3m",        # an on-command expires on the node after this long
     "status_hold": "5m",           # a target must be out of band this long before it shows
+}
+
+
+RETENTION_DEFAULTS = {
+    "raw_readings": "30d",         # raw samples older than this are deleted; rollups are kept
+    "decision_trace": "14d",       # decision trace and command log older than this are deleted
 }
 
 
@@ -207,9 +214,13 @@ class Site:
     timezone: str
     theme: dict
     safety: dict
+    retention: dict = field(default_factory=lambda: {k: seconds(v) for k, v in RETENTION_DEFAULTS.items()})
     devices: dict[str, Device] = field(default_factory=dict)
     zones: dict[str, Zone] = field(default_factory=dict)
     plantings: dict[str, Planting] = field(default_factory=dict)
+    warnings: list[str] = field(default_factory=list)               # worth a look, but the site loads
+    pin_proposals: dict[str, dict[str, str]] = field(default_factory=dict)   # device -> signal -> pin, for blanks
+    pin_unassigned: list[str] = field(default_factory=list)         # signals no clean pin is left for
 
     @property
     def nodes(self) -> list[str]:
@@ -253,7 +264,8 @@ def load_site(path: Path | str, catalog: Catalog) -> Site:
         "status_hold": seconds(safety_raw["status_hold"]),
     }
     site = Site(id=raw["id"], raw=raw, timezone=raw.get("timezone", "UTC"),
-                theme=catalog.items["Theme"][theme_id], safety=safety)
+                theme=catalog.items["Theme"][theme_id], safety=safety,
+                retention={k: seconds(v) for k, v in {**RETENTION_DEFAULTS, **raw.get("retention", {})}.items()})
 
     for node in raw["nodes"]:
         if node["id"] in RESERVED_NODE_IDS:
@@ -283,6 +295,13 @@ def load_site(path: Path | str, catalog: Catalog) -> Site:
             if "indicator.led_strip" in roles and "led_count" not in dev:
                 problems.append(f"{where}: device {did}: LED strips need led_count")
             site.devices[did] = Device(id=did, node=node["id"], model=model, roles=roles, raw=dev)
+        if node["board"] in boards:
+            report = check_node(node["id"], boards[node["board"]],
+                                [d for d in site.devices.values() if d.node == node["id"]])
+            problems += [f"{where}: {p}" for p in report.problems]
+            site.warnings += report.warnings
+            site.pin_proposals.update(report.proposals)
+            site.pin_unassigned += report.unassigned
 
     claimed: dict[str, list[tuple[int, int, str]]] = {}
     for zone in raw["zones"]:

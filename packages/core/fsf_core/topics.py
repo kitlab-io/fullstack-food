@@ -18,8 +18,21 @@ def zone_status(site: str, zone: str) -> str:
 
 
 def hub_cmd(site: str) -> str:
-    """Operator commands to the hub, e.g. {"name": "advance_stage", "planting": "oyster-1"}."""
+    """Operator commands to the hub, e.g. {"id": "a1", "name": "advance_stage", "planting": "oyster-1"}.
+
+    Payload: schemas/mqtt/hub_command.schema.json.
+    """
     return f"{ROOT}/{site}/hub/cmd"
+
+
+def hub_reply(site: str) -> str:
+    """The hub's answer to each command, carrying the command's id. Not retained."""
+    return f"{ROOT}/{site}/hub/reply"
+
+
+def hub_state(site: str) -> str:
+    """Retained snapshot: plantings, actuators, pauses, overrides, hub version and tick time."""
+    return f"{ROOT}/{site}/hub/state"
 
 
 def clock(site: str) -> str:

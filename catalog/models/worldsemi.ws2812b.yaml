@@ -8,4 +8,32 @@ color_order: GRB
 drivers:
   - { runtime: esphome, platform: esp32_rmt_led_strip, status: untested }
   - { runtime: sim, status: verified }
+# Pins, wiring, power and bench values below are from general experience with this part.
+# Confirm them against the datasheet and on the bench, then set datasheet_checked: true.
+datasheet_checked: false
+pins:
+  - { signal: data, needs: led_data }
+wiring:
+  - { part: "74AHCT125 level shifter", qty: 1, purpose: "raises the 3.3 V data signal to 5 V" }
+  - { part: "330 Ohm resistor", qty: 1, purpose: "series resistor on the data line, close to the strip" }
+  - { part: "1000 uF capacitor", qty: 1, purpose: "across 5 V and ground at the start of the strip" }
+  - { part: "5 V power injection wire", qty: 1, purpose: "feeds the far end of the strip", when: "the strip is long enough to dim or shift colour towards the end" }
+calibration:
+  procedure: led_segment_check
+  produces: []
+  notes: "Each zone's segment lights in turn and the builder confirms position and colour."
+bench_test:
+  stimulus: "Run the segment check"
+  expect: "Every LED of each segment lights in the colour named on screen"
+troubleshooting:
+  - symptom: "Wrong colours"
+    causes: ["colour order does not match the strip", "strip is RGBW, not RGB", "led_count is wrong"]
+    checks: ["Light pure red, green and blue in turn and note what shows", "Count the LEDs and compare with led_count"]
+  - symptom: "First LED flickers or the strip shows random colours"
+    causes: ["3.3 V data without a level shifter", "long data wire", "no series resistor", "ground not shared with the board"]
+    checks: ["Fit the level shifter", "Shorten the data wire", "Check ground is joined"]
+  - symptom: "Dims or turns reddish towards the far end"
+    causes: ["voltage drop along the strip", "supply too small"]
+    checks: ["Measure 5 V at the far end at full brightness", "Add power injection", "Lower brightness in the theme"]
+power: { rail: 5v, per: led, typical_ma: 20, peak_ma: 60 }
 notes: "No white channel: W is mixed into RGB."

@@ -25,6 +25,8 @@ def main() -> None:
     parser.add_argument("--mqtt-host", default=os.environ.get("FSF_MQTT_HOST", "localhost"))
     parser.add_argument("--mqtt-port", type=int, default=int(os.environ.get("FSF_MQTT_PORT", "1883")))
     parser.add_argument("--db", default=os.environ.get("FSF_DB", ":memory:"), help="SQLite file for readings and events")
+    parser.add_argument("--reset-db", action="store_true",
+                        help="delete the database file first (mock runs: simulated time restarts with every run)")
     parser.add_argument("--tick", type=float, default=30.0, help="seconds of (possibly simulated) time between control ticks")
     parser.add_argument("--clock", choices=["system", "bus"], default="system")
     args = parser.parse_args()
@@ -38,6 +40,9 @@ def main() -> None:
     while clock.now() is None:      # bus clock: wait for the simulator's first tick
         bus.poll()
         time.sleep(0.05)
+    if args.reset_db and args.db != ":memory:":
+        for suffix in ("", "-wal", "-shm"):
+            Path(args.db + suffix).unlink(missing_ok=True)
     hub = Hub(site, catalog, bus, clock, Store(args.db))
     hub.start()
     print(f"hub: running site {site.id} against {args.mqtt_host}:{args.mqtt_port} (clock: {args.clock})", flush=True)
