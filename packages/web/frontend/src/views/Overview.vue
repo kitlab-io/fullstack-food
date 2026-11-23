@@ -1,7 +1,7 @@
 <script setup>
 import { ref } from 'vue'
 
-import { get, useLive } from '../api.js'
+import { get, site, useLive } from '../api.js'
 import BulletBar from '../components/BulletBar.vue'
 import StatusBadge from '../components/StatusBadge.vue'
 import { ago, sentence, span, statusLabel } from '../format.js'
@@ -39,7 +39,7 @@ function due(planting) {
       </header>
 
       <p v-for="status in banners(zone)" :key="status" class="banner">
-        <strong>{{ statusLabel(status) }}.</strong> {{ NEEDS_PERSON[status] }}
+        <strong>{{ statusLabel(status) }}.</strong> {{ site?.theme.statuses[status]?.meaning ?? NEEDS_PERSON[status] }}
         <template v-if="status === 'observing' && zone.observing"> Reason: {{ zone.observing }}.</template>
       </p>
       <p v-if="others(zone).length" class="small muted">

@@ -24,7 +24,9 @@ FSF_SITE=mushrooms FSF_SPEED=600 docker compose -f deploy/compose/base.yaml -f d
 ```
 
 `FSF_SITE` is `houseplants`, `microgreens` or `mushrooms`. `FSF_SPEED` is simulated seconds
-per real second. The dashboard is at http://localhost:8080 (read-only: zones, charts, devices, log, raw MQTT traffic).
+per real second. The dashboard is at http://localhost:8080: zones, charts, devices, log, raw MQTT traffic, and actions such as
+advancing a stage or pausing a zone. The mock stack runs it without a login; a real deployment needs
+`FSF_WEB_PASSWORD_HASH` (make one with `python -m fsf_web hash-password`).
 The hub log prints each zone status change. To watch the MQTT traffic:
 
 ```bash
@@ -43,6 +45,7 @@ Nothing below has been run on a board yet.
 
 ```bash
 fsf validate --pins sites/local/my-site          # check pin assignments, propose pins for blanks
+fsf docs build sites/local/my-site               # BOM, wiring diagrams, build guide, checklist, LED legend
 fsf firmware build sites/local/my-site           # one ESPHome config per node in build/firmware/<site>/
 fsf firmware flash sites/local/my-site shelf-node    # needs `pip install esphome` and a filled-in secrets.yaml
 fsf node test shelf-node --site sites/local/my-site --mqtt-host <broker> --actuate

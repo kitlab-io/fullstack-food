@@ -50,7 +50,9 @@ class Store:
         if readonly:
             self._db = sqlite3.connect(f"file:{Path(path).as_posix()}?mode=ro", uri=True)
             return
-        self._db = sqlite3.connect(path)
+        # One thread uses it at a time. The check is off because in tests the in-memory bus delivers a
+        # dashboard command to the hub on the web server's worker thread.
+        self._db = sqlite3.connect(path, check_same_thread=False)
         if path != ":memory:":
             self._db.execute("PRAGMA journal_mode=WAL")
         columns = [row[1] for row in self._db.execute("PRAGMA table_info(events)")]

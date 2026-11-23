@@ -165,10 +165,7 @@ onMounted(async () => { meta.value = await get('/meta') })
 <style scoped>
 .card { display: grid; gap: 0.75rem; min-width: 0; }
 .field { display: grid; gap: 0.2rem; font-size: 0.8rem; color: var(--muted-text); }
-select, input[type='search'] {
-  font: inherit; color: var(--text); background: var(--bg); border: 1px solid var(--line);
-  border-radius: 0.4rem; padding: 0.3rem 0.5rem; min-width: 0;
-}
+.filters select, .filters input, .field select, .field input { width: auto; }
 .check { display: inline-flex; gap: 0.35rem; align-items: center; font-size: 0.9rem; }
 .button { border: 1px solid var(--line); border-radius: 0.4rem; padding: 0.25rem 0.6rem; text-decoration: none; font-size: 0.9rem; background: none; cursor: pointer; align-self: end; }
 .tail { list-style: none; margin: 0; padding: 0; max-height: 28rem; overflow-y: auto; border: 1px solid var(--line); border-radius: 0.5rem; }

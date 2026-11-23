@@ -1,8 +1,9 @@
-"""The dashboard's HTTP API (read-only) and static frontend.
+"""The dashboard's HTTP API and static frontend.
 
 Reads come from the hub's SQLite file, opened read-only for each request, and from what
-MQTT says is true right now (live.py). The service never writes to the database and never
-publishes to device topics.
+MQTT says is true right now (live.py). The only thing that changes anything is
+POST /api/commands, which publishes an operator command to the hub and returns its reply.
+The service never writes to the database and never publishes to device topics.
 """
 
 from __future__ import annotations
@@ -15,15 +16,22 @@ import tempfile
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException, Query
-from fastapi.responses import FileResponse, Response, StreamingResponse
+from fastapi import Body, FastAPI, HTTPException, Query, Request
+from fastapi.responses import FileResponse, JSONResponse, Response, StreamingResponse
+from jsonschema import Draft202012Validator
 from starlette.background import BackgroundTask
 from fastapi.staticfiles import StaticFiles
 
-from fsf_core import Catalog, Site, seconds
+from fsf_core import Catalog, Site, find_repo_root, seconds
 from fsf_hub import Store
 
+from .auth import COOKIE, SESSION_S, Auth, LoginError
 from .live import Live
+
+OPEN_PATHS = {"/api/login", "/api/session", "/api/health"}
+# What a person may do from the dashboard. `commission` is left to the commissioning tools.
+ACTIONS = ("advance_stage", "water_now", "set_override", "clear_override", "pause_zone", "resume_zone",
+           "actuator_test", "set_zone_mode")
 
 RAW_UP_TO = 12 * 3600           # spans up to this long are served as raw samples
 FIVE_MIN_UP_TO = 4 * 86400      # then 5-minute rollups, then hourly
@@ -137,10 +145,65 @@ def on_intervals(commands: list[dict]) -> list[list[float]]:
 
 
 def create_app(site: Site, catalog: Catalog, db_path: str, live: Live, static_dir: Path | None = None,
-               developer: bool = False) -> FastAPI:
-    """developer: also allow downloading the whole database."""
+               developer: bool = False, auth: Auth | None = None) -> FastAPI:
+    """developer: also allow downloading the whole database. auth: who may read and act
+    (default: nobody can log in, so the API is closed)."""
     app = FastAPI(title="Fullstack Food", docs_url="/api/docs", openapi_url="/api/openapi.json", redoc_url=None)
     components = catalog.items["Component"]
+    auth = auth or Auth()
+    command_schema = Draft202012Validator(json.loads(
+        (find_repo_root() / "schemas" / "mqtt" / "hub_command.schema.json").read_text(encoding="utf-8")))
+
+    @app.middleware("http")
+    async def guard(request: Request, call_next):
+        path = request.url.path
+        session = auth.session(request.cookies.get(COOKIE))
+        request.state.session = session
+        if path.startswith("/api/") and path not in OPEN_PATHS and not auth.no_login:
+            reading = request.method in ("GET", "HEAD")
+            if session is None and not (reading and auth.read_without_login):
+                return JSONResponse({"detail": "login required"}, status_code=401)
+            if not reading and request.headers.get("x-csrf-token") != session["csrf"]:
+                return JSONResponse({"detail": "missing or wrong CSRF token"}, status_code=403)
+        return await call_next(request)
+
+    @app.get("/api/session")
+    def get_session(request: Request) -> dict:
+        return auth.describe(request.state.session)
+
+    @app.post("/api/login")
+    def login(request: Request, body: dict = Body(...)) -> JSONResponse:
+        try:
+            token, session = auth.login(str(body.get("password", "")), body.get("name"))
+        except LoginError as err:
+            return JSONResponse({"detail": str(err)}, status_code=401)
+        response = JSONResponse(auth.describe(session))
+        response.set_cookie(COOKIE, token, max_age=SESSION_S, httponly=True, samesite="strict",
+                            secure=request.url.scheme == "https", path="/")
+        return response
+
+    @app.post("/api/logout")
+    def logout(request: Request) -> JSONResponse:
+        auth.logout(request.cookies.get(COOKIE))
+        response = JSONResponse(auth.describe(None))
+        response.delete_cookie(COOKIE, path="/")
+        return response
+
+    @app.post("/api/commands")
+    def post_command(request: Request, body: dict = Body(...)) -> dict:
+        """Send one operator command to the hub and return its reply: {"ok": ..., "result" or "error"}."""
+        session = request.state.session
+        command = {k: v for k, v in body.items() if k not in ("id", "by") and v is not None}
+        if command.get("name") not in ACTIONS:
+            raise HTTPException(422, f"name must be one of {', '.join(ACTIONS)}")
+        command["by"] = f"dashboard:{session['name']}" if session else "dashboard"
+        errors = [e.message for e in command_schema.iter_errors({**command, "id": "x"})]
+        if errors:
+            raise HTTPException(422, "; ".join(errors))
+        reply = live.command(command)
+        if reply is None:
+            raise HTTPException(504, "the hub did not answer; is it running?")
+        return reply
 
     def store() -> Store:
         try:
@@ -197,6 +260,23 @@ def create_app(site: Site, catalog: Catalog, db_path: str, live: Live, static_di
                         "typical_days": round(typical / 86400, 1) if typical else None,
                         "due_in_s": round(typical - (now - started).total_seconds()) if typical else None,
                         "ready": state["ready"], "hint": (stage or {}).get("advance", {}).get("hint")}
+        actions: dict = {"water": None, "advance": None}
+        if state and stage:
+            dose = next((lp for lp in stage["control"] if lp["strategy"] == "dose"), None)
+            if dose:
+                actions["water"] = {"loop": dose["id"], "volume_ml": dose["dose"]["volume_ml"]}
+            stages = site.plantings[planting_id].recipe["stages"]
+            if state["stage_index"] + 1 >= len(stages):
+                actions["advance"] = {"planting": planting_id, "to_stage": None, "to_zone": None, "blocked": None}
+            else:
+                following = stages[state["stage_index"] + 1]
+                role, target, blocked = following.get("zone_role"), zone_id, None
+                if role and zone.role != role:      # the hub moves it to the first free zone with that role
+                    taken = {p["zone"] for p in (hub or {}).get("plantings", {}).values() if p["zone"]}
+                    free = [z.id for z in site.zones.values() if z.role == role and z.id not in taken]
+                    target = free[0] if free else None
+                    blocked = None if free else f"no free zone with role {role}"
+                actions["advance"] = {"planting": planting_id, "to_stage": following["id"], "to_zone": target, "blocked": blocked}
         nodes = sorted({site.devices[d].node for d in zone.device_ids})
         ages = [r["age_s"] for r in readings if r["age_s"] is not None]
         raw_zone = next(z for z in site.raw["zones"] if z["id"] == zone_id)
@@ -208,6 +288,7 @@ def create_app(site: Site, catalog: Catalog, db_path: str, live: Live, static_di
                 "nodes": [{"id": n, "online": snap["nodes"].get(n, {}).get("online")} for n in nodes],
                 "last_reading_age_s": min(ages) if ages else None,
                 "observing": (hub or {}).get("observing", {}).get(zone_id),
+                "actions": actions,
                 "paused": zone_id in (hub or {}).get("paused", {}),
                 "paused_until": (hub or {}).get("paused", {}).get(zone_id),
                 "overrides": overrides}

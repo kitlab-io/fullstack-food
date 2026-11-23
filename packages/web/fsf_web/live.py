@@ -10,6 +10,7 @@ from __future__ import annotations
 import json
 import queue
 import threading
+import uuid
 from collections import deque
 from datetime import datetime
 from typing import Iterator
@@ -37,7 +38,8 @@ def schema_of(parts: list[str]) -> str | None:
 
 class Live:
     def __init__(self, site_id: str, bus, clock):
-        self.site_id, self.clock = site_id, clock
+        self.site_id, self.clock, self.bus = site_id, clock, bus
+        self._waiting: dict[str, tuple[threading.Event, list]] = {}     # command id -> (arrived, [reply])
         self._lock = threading.Lock()
         self.zones: dict[str, dict] = {}                        # zone -> status payload
         self.devices: dict[str, dict] = {}                      # device -> {"state": payload, "received": ISO}
@@ -66,6 +68,12 @@ class Live:
                 with self._lock:
                     self.zones[parts[1]] = data
                 event = {"kind": "zone", "zone": parts[1], "status": data}
+            elif parts[0] == "hub" and parts[1:] == ["reply"]:
+                reply = json.loads(payload)
+                waiter = self._waiting.get(str(reply.get("id")))
+                if waiter:
+                    waiter[1].append(reply)
+                    waiter[0].set()
             elif parts[0] == "hub" and parts[1:] == ["state"]:
                 data = json.loads(payload)
                 with self._lock:
@@ -115,6 +123,22 @@ class Live:
                 inbox.put_nowait(event)
             except queue.Full:                                  # a browser that stopped reading
                 pass
+
+    def command(self, command: dict, timeout: float = 5.0) -> dict | None:
+        """Publish an operator command to the hub and wait for its reply. None when the hub does not answer.
+
+        This is the dashboard's only way to change anything: the hub applies its limits and
+        interlocks exactly as for automatic control.
+        """
+        command_id = uuid.uuid4().hex[:12]
+        waiter = (threading.Event(), [])
+        self._waiting[command_id] = waiter
+        try:
+            self.bus.publish(topics.hub_cmd(self.site_id), {**command, "id": command_id})
+            waiter[0].wait(timeout)
+            return waiter[1][0] if waiter[1] else None
+        finally:
+            del self._waiting[command_id]
 
     def recent(self, topic: str | None = None, limit: int = 200) -> list[dict]:
         """The newest buffered raw messages, oldest first. `topic` is an MQTT filter with + and #."""

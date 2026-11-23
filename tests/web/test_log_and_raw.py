@@ -14,6 +14,7 @@ from fastapi.testclient import TestClient  # noqa: E402
 
 from fsf_core import topics  # noqa: E402
 from fsf_web import create_app  # noqa: E402
+from fsf_web.auth import Auth  # noqa: E402
 
 
 def test_a_stale_sensor_can_be_diagnosed_from_the_log_alone(served):
@@ -157,7 +158,8 @@ def test_database_download_needs_developer_mode(served, tmp_path):
     assert client.get("/api/export/db").status_code == 403
     assert client.get("/api/meta").json()["developer"] is False
 
-    developer = TestClient(create_app(system.site, system.catalog, system.db_path, system.live, developer=True))
+    developer = TestClient(create_app(system.site, system.catalog, system.db_path, system.live, developer=True,
+                                      auth=Auth(no_login=True)))
     response = developer.get("/api/export/db")
     assert response.status_code == 200 and response.content[:15] == b"SQLite format 3"
     copy = tmp_path / "copy.db"

@@ -1,4 +1,5 @@
 // Labels, units and times. Everything a person reads goes through here.
+import { site } from './api.js'
 
 const UNITS = { degC: '°C', percent: '%', ppm: 'ppm', lux: 'lx', V: 'V', hPa: 'hPa' }
 const QUANTITIES = {
@@ -34,7 +35,7 @@ const STATUSES = {
 
 export const unit = (code) => UNITS[code] ?? code ?? ''
 export const quantityLabel = (q) => QUANTITIES[q] ?? sentence(q)
-export const statusLabel = (s) => STATUSES[s] ?? sentence(s)
+export const statusLabel = (s) => site.value?.theme.statuses[s]?.label ?? STATUSES[s] ?? sentence(s)
 
 export function sentence(id) {
   const text = String(id ?? '').replace(/[_-]+/g, ' ')

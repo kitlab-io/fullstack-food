@@ -1,9 +1,11 @@
 // Data access: plain fetches, plus one shared event stream that tells views when to refetch.
 import { onBeforeUnmount, onMounted, reactive, ref } from 'vue'
 
-export async function get(path, params) {
-  const query = params ? '?' + new URLSearchParams(params) : ''
-  const response = await fetch(`/api${path}${query}`)
+// ---- who is looking: { login_required, authenticated, can_read, can_act, name, csrf, password_configured }
+export const session = ref(null)
+
+async function parse(response) {
+  if (response.status === 401 && session.value?.authenticated) loadSession()      // the session ran out
   if (!response.ok) {
     let detail = response.statusText
     try { detail = (await response.json()).detail ?? detail } catch { /* not JSON */ }
@@ -12,11 +14,39 @@ export async function get(path, params) {
   return response.json()
 }
 
+export async function get(path, params) {
+  const query = params ? '?' + new URLSearchParams(params) : ''
+  return parse(await fetch(`/api${path}${query}`))
+}
+
+async function post(path, body) {
+  return parse(await fetch(`/api${path}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': session.value?.csrf ?? '' },
+    body: JSON.stringify(body ?? {}),
+  }))
+}
+
+export async function loadSession() {
+  session.value = await get('/session')
+  return session.value
+}
+export async function login(password, name) {
+  session.value = await post('/login', { password, name })
+}
+export async function logout() {
+  session.value = await post('/logout')
+  source?.close()
+  source = null
+}
+/** Send one operator command to the hub; resolves with its reply { ok, result | error }. */
+export const act = (command) => post('/commands', command)
+
 // ---- site description (fetched once)
 export const site = ref(null)
 let sitePromise = null
 export function loadSite() {
-  sitePromise ??= get('/site').then((data) => (site.value = data))
+  sitePromise ??= get('/site').then((data) => (site.value = data)).catch((err) => { sitePromise = null; throw err })
   return sitePromise
 }
 

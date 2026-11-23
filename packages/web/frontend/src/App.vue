@@ -1,10 +1,28 @@
 <script setup>
-import { onMounted, ref } from 'vue'
+import { onMounted, ref, watch } from 'vue'
 
-import { connection, loadSite, site } from './api.js'
+import { connection, loadSession, loadSite, logout, session, site } from './api.js'
+import Login from './views/Login.vue'
 
 const error = ref(null)
-onMounted(() => loadSite().catch((err) => (error.value = err.message)))
+const wantsLogin = ref(false)
+
+async function start() {
+  error.value = null
+  try {
+    const who = await loadSession()
+    if (who.can_read) await loadSite()
+  } catch (err) {
+    error.value = err.message
+  }
+}
+onMounted(start)
+watch(() => session.value?.can_read, (can) => { if (can && !site.value) start() })
+
+async function leave() {
+  await logout()
+  wantsLogin.value = false
+}
 </script>
 
 <template>
@@ -13,20 +31,27 @@ onMounted(() => loadSite().catch((err) => (error.value = err.message)))
       <RouterLink to="/" class="brand">
         <strong>{{ site?.name ?? 'Fullstack Food' }}</strong>
       </RouterLink>
-      <nav aria-label="Main">
+      <nav v-if="session?.can_read" aria-label="Main">
         <RouterLink to="/">Zones</RouterLink>
         <RouterLink to="/devices">Devices</RouterLink>
         <RouterLink to="/log">Log</RouterLink>
         <RouterLink to="/raw">Raw data</RouterLink>
       </nav>
-      <span class="link" :class="{ down: !connection.live }" role="status">
+      <span v-if="session?.can_read" class="link" :class="{ down: !connection.live }" role="status">
         <span class="dot" aria-hidden="true"></span>{{ connection.live ? 'Live' : 'Reconnecting' }}
       </span>
+      <span v-if="session?.authenticated" class="who">
+        {{ session.name }} <button type="button" class="plain small" @click="leave">Log out</button>
+      </span>
+      <button v-else-if="session?.login_required && session.can_read" type="button" class="plain small" @click="wantsLogin = true">
+        Log in to act
+      </button>
     </div>
   </header>
   <main class="page">
-    <p v-if="error" class="error">Could not load the site: {{ error }}</p>
-    <RouterView v-else-if="site" />
+    <p v-if="error" class="error">Could not reach the dashboard service: {{ error }}</p>
+    <Login v-else-if="session && (!session.can_read || (wantsLogin && !session.authenticated))" @done="wantsLogin = false" />
+    <RouterView v-else-if="site" @login="wantsLogin = true" />
     <p v-else class="muted">Loading…</p>
   </main>
 </template>
@@ -43,4 +68,5 @@ nav a.router-link-exact-active { background: var(--track); color: var(--text); }
 .dot { width: 0.55rem; height: 0.55rem; border-radius: 50%; background: #2e9d62; }
 .down .dot { background: var(--warn); }
 .down { color: var(--warn-text); }
+.who { font-size: 0.9rem; display: inline-flex; gap: 0.5rem; align-items: center; }
 </style>

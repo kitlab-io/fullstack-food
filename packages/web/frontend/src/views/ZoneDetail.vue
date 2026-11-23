@@ -6,10 +6,12 @@ import ActuatorTimeline from '../components/ActuatorTimeline.vue'
 import BulletBar from '../components/BulletBar.vue'
 import SeriesChart from '../components/SeriesChart.vue'
 import StatusBadge from '../components/StatusBadge.vue'
+import ZoneActions from '../components/ZoneActions.vue'
 import { ago, clock, sentence, span, statusLabel } from '../format.js'
 import { ledColor } from '../status.js'
 
 const props = defineProps({ id: { type: String, required: true } })
+const emit = defineEmits(['login'])
 
 const RANGES = [
   { key: '6h', label: '6 hours', seconds: 6 * 3600 },
@@ -98,6 +100,8 @@ const led = computed(() => zone.value.led)
       </div>
       <p v-else class="muted">Nothing planted here.</p>
     </section>
+
+    <ZoneActions :zone="zone" @done="refresh" @login="emit('login')" />
 
     <section class="card">
       <h2>Now</h2>

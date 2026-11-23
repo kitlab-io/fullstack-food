@@ -29,8 +29,10 @@ services:
       broker:
         condition: service_healthy
 
-  # Read-only dashboard on http://localhost:8080. It has no login yet, so it is published on
-  # this machine only; change the port mapping to reach it from the rest of the network.
+  # Dashboard on http://localhost:8080. Set FSF_WEB_PASSWORD_HASH (make one with
+  # `python -m fsf_web hash-password`) or nobody can log in. It is published on this machine
+  # only; change the port mapping to reach it from the rest of the local network, never the
+  # internet.
   web:
     build:
       context: ../..
@@ -38,6 +40,9 @@ services:
     restart: unless-stopped
     command: ["python", "-m", "fsf_web", "--site", "sites/examples/${FSF_SITE:-houseplants}",
               "--mqtt-host", "broker", "--db", "/data/hub.db", "--host", "0.0.0.0"]
+    environment:
+      FSF_WEB_PASSWORD_HASH: ${FSF_WEB_PASSWORD_HASH:-}
+      FSF_WEB_READ_WITHOUT_LOGIN: ${FSF_WEB_READ_WITHOUT_LOGIN:-0}
     volumes:
       - hub-data:/data        # the service opens the database read-only
     ports:

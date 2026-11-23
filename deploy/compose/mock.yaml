@@ -11,6 +11,10 @@ services:
       - mock-data:/data
 
   web:
+    # A simulated site on a port published on this machine only: no login, unless a password
+    # hash is given (FSF_WEB_NO_LOGIN=0 FSF_WEB_PASSWORD_HASH=...), as the browser tests do.
+    environment:
+      FSF_WEB_NO_LOGIN: ${FSF_WEB_NO_LOGIN:-1}
     command: ["python", "-m", "fsf_web", "--site", "sites/examples/${FSF_SITE:-houseplants}",
               "--mqtt-host", "broker", "--db", "/data/mock.db", "--host", "0.0.0.0", "--clock", "bus"]
     volumes:

@@ -1,11 +1,29 @@
 <script setup>
 import { ref } from 'vue'
 
-import { get, site, useLive } from '../api.js'
+import { act, get, session, site, useLive } from '../api.js'
+import ConfirmDialog from '../components/ConfirmDialog.vue'
 import { ago, clock, reading, sentence, span } from '../format.js'
 
 const nodes = ref([])
-const { error, loading } = useLive(async () => { nodes.value = (await get('/devices')).nodes }, { every: 3000 })
+const { error, loading, refresh } = useLive(async () => { nodes.value = (await get('/devices')).nodes }, { every: 3000 })
+
+// Test pulse: a short leased on-command through the hub, for commissioning.
+const pulseDialog = ref(null)
+const pulsing = ref(null)
+const pulseResult = ref(null)
+async function pulse(device) {
+  pulsing.value = device
+  pulseResult.value = null
+  if (!(await pulseDialog.value.ask())) return
+  try {
+    const reply = await act({ name: 'actuator_test', device: device.id, duration_s: 2 })
+    pulseResult.value = { id: device.id, ok: reply.ok, text: reply.ok ? 'Pulsed for 2 s.' : `The hub refused: ${reply.error}` }
+    refresh()
+  } catch (err) {
+    pulseResult.value = { id: device.id, ok: false, text: err.message }
+  }
+}
 
 const DRIVER = {
   verified: 'passes the test suite',
@@ -62,6 +80,10 @@ function now(device) {
           <span v-if="device.class === 'actuator' && device.switched_on_24h !== undefined" class="muted small block">
             {{ device.switched_on_24h }}× on in 24 h, {{ span(device.on_s_24h) }} in total
           </span>
+          <button v-if="device.class === 'actuator' && session?.can_act" type="button" class="small block-button" @click="pulse(device)">
+            Test pulse
+          </button>
+          <span v-if="pulseResult?.id === device.id" class="small block" :class="{ warn: !pulseResult.ok }" role="status">{{ pulseResult.text }}</span>
           <span v-if="device.unacked" class="pill bad">{{ device.unacked }} unanswered command{{ device.unacked === 1 ? '' : 's' }}</span>
         </span>
         <span role="cell" class="tnum"><span class="label">Last heard</span>{{ ago(device.age_s) }}</span>
@@ -80,6 +102,11 @@ function now(device) {
       </div>
     </div>
   </section>
+
+  <ConfirmDialog ref="pulseDialog" title="Test pulse" confirm-label="Switch on for 2 s">
+    <p><strong>{{ pulsing?.id }}</strong> ({{ pulsing?.model_name ?? pulsing?.model }}) is switched on for 2 seconds, then off.</p>
+    <p class="muted">Make sure it is safe for it to run: water in the reservoir for a pump, nothing touching a heater.</p>
+  </ConfirmDialog>
 </template>
 
 <style scoped>
@@ -88,6 +115,8 @@ function now(device) {
 .tr { display: grid; grid-template-columns: 2.2fr 1.6fr 0.9fr 1.6fr; gap: 0.75rem; padding: 0.6rem 0; border-top: 1px solid var(--line); align-items: start; }
 .th { color: var(--muted-text); font-size: 0.8rem; border-top: 0; padding-bottom: 0.25rem; }
 .block { display: block; }
+.block-button { display: block; margin-top: 0.35rem; }
+.warn { color: var(--warn-text); }
 .label { display: none; }
 @media (max-width: 46rem) {
   .th { display: none; }

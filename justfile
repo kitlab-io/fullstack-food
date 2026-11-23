@@ -32,6 +32,10 @@ mock-watch:
 firmware site *args:
     uv run fsf firmware build {{site}} {{args}}
 
+# BOM, wiring diagrams, build guide, checklist and LED legend into build/docs/<site>
+docs site *args:
+    uv run fsf docs build {{site}} {{args}}
+
 # Run the node contract suite against a broker: just node-test shelf-node --site sites/local/my-site --actuate
 node-test node *args:
     uv run fsf node test {{node}} {{args}}

@@ -4,6 +4,7 @@
     fsf firmware build <site>               one ESPHome config per node
     fsf firmware flash <site> <node>        compile and upload with the ESPHome command line
     fsf node test <node> --site <site>      run the node contract suite against a broker
+    fsf docs build <site>                   BOM, wiring diagrams, build guide, checklist, LED legend
     fsf bench <device> --site <site>        bench-test one device and record the result
     fsf calibrate <device> --site <site>    measure a device's calibration values
     fsf zone mode <zone> observe|active     compute-only or really switching
@@ -64,6 +65,19 @@ def _firmware(args, root: Path, catalog: Catalog) -> int:
         print("firmware: FAILED")
         print("\n".join(f"  {p}" for p in err.problems))
         return 1
+
+
+def _docs(args, root: Path, catalog: Catalog) -> int:
+    from .builddocs import build, power_budget
+
+    site = load_site(args.site, catalog)
+    out_dir = Path(args.out) if args.out else root / "build" / "docs" / site.id
+    for path in build(site, catalog, out_dir):
+        print(f"wrote {path}")
+    for entry in power_budget(site, catalog):
+        for warning in entry["warnings"]:
+            print(f"warning: node {entry['node']}: {warning}")
+    return 0
 
 
 def _node_test(args, root: Path, catalog: Catalog) -> int:
@@ -192,6 +206,11 @@ def main(argv: list[str] | None = None) -> int:
     flash.add_argument("--out", help="folder the configs were built into")
     flash.add_argument("--device", help="serial port or address; default lets esphome choose")
 
+    docs = sub.add_parser("docs", help="generate build documents").add_subparsers(dest="action", required=True)
+    docs_build = docs.add_parser("build", help="BOM, wiring diagrams, build guide, checklist and LED legend for a site")
+    docs_build.add_argument("site", help="site directory or site.yaml")
+    docs_build.add_argument("--out", help="output folder (default: build/docs/<site id>)")
+
     node = sub.add_parser("node", help="work with one node").add_subparsers(dest="action", required=True)
     test = node.add_parser("test", help="run the node contract suite against a broker")
     test.add_argument("node")
@@ -234,7 +253,7 @@ def main(argv: list[str] | None = None) -> int:
         print("\n".join(f"  {p}" for p in err.problems))
         return 1
     try:
-        handler = {"validate": _validate, "firmware": _firmware, "node": _node_test}.get(args.command, _commissioning)
+        handler = {"validate": _validate, "firmware": _firmware, "node": _node_test, "docs": _docs}.get(args.command, _commissioning)
         return handler(args, root, catalog)
     except ConfigError as err:
         print(f"site {args.site}: INVALID")

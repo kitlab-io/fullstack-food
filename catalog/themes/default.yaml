@@ -7,19 +7,35 @@ priority: [offline, paused, sensor_stale, critical, reservoir_low, too_hot, too_
 # Colours are [R, G, B, W]. Every status also has a distinct effect or hue family so
 # states stay distinguishable without relying on red/green alone.
 statuses:
-  ok:            { color: [0, 60, 0, 0],     effect: solid }
-  idle:          { color: [0, 0, 0, 0],      effect: "off" }
-  needs_water:   { color: [0, 0, 255, 0],    effect: breathe }
-  too_wet:       { color: [0, 0, 255, 0],    effect: solid }
-  reservoir_low: { color: [0, 0, 255, 0],    effect: blink }
-  too_cold:      { color: [0, 180, 255, 0],  effect: solid }
-  too_hot:       { color: [255, 40, 0, 0],   effect: solid }
-  too_dry:       { color: [255, 160, 0, 0],  effect: solid }
-  too_humid:     { color: [120, 0, 255, 0],  effect: solid }
-  stale_air:     { color: [255, 160, 0, 0],  effect: breathe }
-  stage_ready:   { color: [0, 0, 0, 255],    effect: breathe }
-  critical:      { color: [255, 0, 0, 0],    effect: blink }
-  sensor_stale:  { color: [255, 0, 255, 0],  effect: blink }
-  offline:       { color: [255, 0, 255, 0],  effect: blink_slow }
-  paused:        { color: [0, 0, 0, 40],     effect: blink_slow }
-  observing:     { color: [0, 70, 90, 0],    effect: breathe }
+  ok:            { color: [0, 60, 0, 0],     effect: solid,
+                   label: "All good", meaning: "Nothing to do." }
+  idle:          { color: [0, 0, 0, 0],      effect: "off",
+                   label: "Empty", meaning: "Nothing is planted in this zone." }
+  needs_water:   { color: [0, 0, 255, 0],    effect: breathe,
+                   label: "Needs water", meaning: "Soil is drier than it should be. Watering follows by itself where a pump is fitted." }
+  too_wet:       { color: [0, 0, 255, 0],    effect: solid,
+                   label: "Too wet", meaning: "Soil is wetter than it should be. Check drainage; nothing is watered until it dries." }
+  reservoir_low: { color: [0, 0, 255, 0],    effect: blink,
+                   label: "Reservoir low", meaning: "Refill the reservoir. Watering is blocked until you do." }
+  too_cold:      { color: [0, 180, 255, 0],  effect: solid,
+                   label: "Too cold", meaning: "Colder than the planting wants. Check the heater and for draughts." }
+  too_hot:       { color: [255, 40, 0, 0],   effect: solid,
+                   label: "Too hot", meaning: "Warmer than the planting wants. Move it out of the sun or add ventilation." }
+  too_dry:       { color: [255, 160, 0, 0],  effect: solid,
+                   label: "Air too dry", meaning: "Humidity is below what the planting wants. Check the humidifier and its water." }
+  too_humid:     { color: [120, 0, 255, 0],  effect: solid,
+                   label: "Too humid", meaning: "Humidity is above what the planting wants. Air the space." }
+  stale_air:     { color: [255, 160, 0, 0],  effect: breathe,
+                   label: "Stale air", meaning: "CO2 is above its limit. Check the fan; open the chamber for a moment." }
+  stage_ready:   { color: [0, 0, 0, 255],    effect: breathe,
+                   label: "Ready for next stage", meaning: "Look at the planting, then advance it on the dashboard." }
+  critical:      { color: [255, 0, 0, 0],    effect: blink,
+                   label: "Critical", meaning: "A reading is far outside what the planting tolerates. Look now." }
+  sensor_stale:  { color: [255, 0, 255, 0],  effect: blink,
+                   label: "Sensor not reporting", meaning: "A sensor has gone quiet, so what depends on it is switched off. Check its wiring and its node." }
+  offline:       { color: [255, 0, 255, 0],  effect: blink_slow,
+                   label: "Node offline", meaning: "The node is not reachable. Check its power and WiFi. Its actuators switch off by themselves." }
+  paused:        { color: [0, 0, 0, 40],     effect: blink_slow,
+                   label: "Paused", meaning: "Someone paused this zone. Everything is off until it is resumed on the dashboard." }
+  observing:     { color: [0, 70, 90, 0],    effect: breathe,
+                   label: "Observing only", meaning: "The hub is logging what it would do but switching nothing, until the zone is commissioned." }

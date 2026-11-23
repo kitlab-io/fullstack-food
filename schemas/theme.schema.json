@@ -66,6 +66,14 @@
               "blink_slow",
               "off"
             ]
+          },
+          "label": {
+            "type": "string",
+            "description": "What people call this status"
+          },
+          "meaning": {
+            "type": "string",
+            "description": "What it means and what to do, one sentence"
           }
         },
         "required": [

@@ -1,8 +1,8 @@
 # Installation, assembly, testing and troubleshooting plan
 
 Status (2026-11-22): the recommended options in section 9 are accepted. Phase I1 is built,
-and so are the software halves of I2 and I3; their hardware halves and I4 to I6 are not
-started. Today the system runs only against simulated nodes; this plan is
+and so are the software halves of I2 and I3 and the generators of I4; the hardware halves,
+I5 and I6 are not started. Today the system runs only against simulated nodes; this plan is
 the path from that to a working physical installation that someone else can replicate.
 
 How I1 stands:
@@ -63,6 +63,28 @@ How I3 stands:
 - All of this is tested against simulated nodes only. Not done: the interactive fault
   checks of stage 5 (pull a sensor, empty the reservoir), the 24 h dry-run review and the
   48 h soak as tools, and `tests/hil/` holds only the node contract suite.
+
+How I4 stands:
+
+- `fsf docs build <site>` writes `bom.csv`, one `wiring-<node>.svg` per node,
+  `build-guide.html`, `checklist.html` and `legend.html` into `build/docs/<site>/`. All are
+  self-contained and load nothing from the network.
+- The BOM adds each model's support parts (conditional ones once per node) and sizes the
+  5 V and 12 V supplies from the power budget with a 30 % margin. The budget warns when a
+  load's current is not in the catalog and when a 5 V load is too large to feed through
+  the board.
+- The build guide orders steps so that each ends in a test: flash the bare board, then
+  parts others plug into, sensors, actuators, node acceptance, and per zone observe, zone
+  test, active. It carries a warning listing every part whose values are unconfirmed.
+- Status labels and meanings moved into the theme, so the legend card and the dashboard
+  use the same words.
+- The done-when (a second person builds the house plant design from the guide alone) needs
+  hardware and a second person, and is open. Not done: XLSX BOM, reference design
+  directories under `hardware/` with layouts and photos, the 3.3 V regulator limit per
+  board, and wiring diagrams that show power rails and support parts as symbols.
+- Finding from the power budget: a 20-LED RGBW strip peaks at 1.6 A on 5 V, so every
+  example node needs its own 5 V supply for the strip; and the 12 V current of the heat
+  wire and the CW/WW strip is not in the catalog, so those supplies cannot be sized yet.
 - Noticed on the way: when the reservoir sensor is silent the hub does not block the pumps
   (no reading is treated as not low). On hardware that should probably fail safe.
 

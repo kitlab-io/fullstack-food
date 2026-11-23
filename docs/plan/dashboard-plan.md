@@ -1,7 +1,7 @@
 # Web dashboard plan
 
 Status (2026-11-22): the recommended options in section 9 are accepted. Phases D1 and D2
-and D3 are built; D4 and D5 are not started. It builds on the hub, simulator and
+to D4 are built; D5 is not started. It builds on the hub, simulator and
 MQTT contract described in `AGENTS.md`.
 
 How D1 differs from the text below:
@@ -49,6 +49,24 @@ How D3 stands:
   flag in the tail (the bus does not pass it on), planting as a log filter in the UI, and a
   link from a log row to the chart at that moment (rows link to the zone).
 - Found on the way and fixed: a payload that was not JSON made the hub raise.
+
+How D4 stands:
+
+- One shared login: a salted scrypt hash in `FSF_WEB_PASSWORD_HASH`, a 12-hour session in an
+  HttpOnly, SameSite=Strict cookie, a CSRF token on every state-changing request, and a
+  lockout after five wrong passwords. The name given at login goes into the event log with
+  each command (`dashboard:<name>`). Without a configured hash nobody can log in.
+- Reading without login is `--read-without-login` (a flag and environment variable, not a
+  site-file setting as section 6 says). The mock stack runs with `--no-login`, which is
+  acceptable only because its port is published on the local machine.
+- Actions on the zone page, each behind a confirmation: advance stage (naming the zone the
+  planting moves to), water now, override a target, clear overrides, pause and resume,
+  observe or active. Test pulse on the devices page. The hub's refusals are shown as given.
+- The done-when is `tests/browser/test_mushroom_grow.py`: Playwright logs in and takes a
+  mushroom planting from incubation to finished through the UI, including a pause, an
+  override, a refusal and a test pulse. It passed here against the mock stack through
+  Microsoft Edge; it is skipped unless `FSF_BROWSER_URL` is set, so CI does not run it.
+- Not done: broker ACLs for the web service (plan phase 6), HTTPS, per-person accounts.
 
 ## 1. Goals
 

@@ -11,6 +11,7 @@ pytest.importorskip("httpx")
 from fastapi.testclient import TestClient  # noqa: E402
 
 from fsf_web import Live, create_app  # noqa: E402
+from fsf_web.auth import Auth  # noqa: E402
 
 
 def test_overview_lists_zones_with_problems_first(served):
@@ -149,7 +150,8 @@ def test_site_description_carries_the_theme(served):
     _, client = served("microgreens")
     site = client.get("/api/site").json()
     assert site["id"] == "microgreens" and site["theme"]["priority"][0] == "offline"
-    assert site["theme"]["statuses"]["paused"] == {"color": [0, 0, 0, 40], "effect": "blink_slow"}
+    paused = site["theme"]["statuses"]["paused"]
+    assert paused["color"] == [0, 0, 0, 40] and paused["effect"] == "blink_slow" and paused["label"] == "Paused"
     assert [s["id"] for s in site["plantings"][0]["stages"]] == ["germination", "blackout", "light", "harvest"]
     assert site["zones"][0]["indicator"] == {"strip": "status-strip", "leds": [0, 9]}
 
@@ -180,9 +182,9 @@ def test_live_state_is_complete_for_a_service_started_late(served):
 
 def test_api_never_writes_and_reports_a_missing_database(served, tmp_path):
     system, client = served("houseplants")
-    for route in client.app.routes:
-        assert getattr(route, "methods", {"GET"}) <= {"GET", "HEAD"}, route.path
-    missing = TestClient(create_app(system.site, system.catalog, str(tmp_path / "nope.db"), system.live))
+    writing = {route.path for route in client.app.routes if not getattr(route, "methods", {"GET"}) <= {"GET", "HEAD"}}
+    assert writing == {"/api/login", "/api/logout", "/api/commands"}       # the one way to act goes through the hub
+    missing = TestClient(create_app(system.site, system.catalog, str(tmp_path / "nope.db"), system.live, auth=Auth(no_login=True)))
     assert missing.get("/api/zones").status_code == 200                # live state needs no database
     assert missing.get("/api/zones/pothos-window").status_code == 503
     assert missing.get("/api/devices").status_code == 200

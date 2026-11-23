@@ -1,15 +1,19 @@
 """Serve the dashboard for one site.
 
     python -m fsf_web --site sites/examples/houseplants --db hub.db --mqtt-host localhost
+    python -m fsf_web hash-password        # make the value for FSF_WEB_PASSWORD_HASH
 
-Binds to 127.0.0.1 unless told otherwise. There is no login yet (dashboard plan phase D4),
-and nothing here can change the system: the API is read-only.
+Binds to 127.0.0.1 unless told otherwise. Everything needs the shared login unless
+--read-without-login (pages open, actions need the login) or --no-login (no authentication
+at all: only for a port published on this machine, as in the mock stack).
 """
 
 from __future__ import annotations
 
 import argparse
+import getpass
 import os
+import sys
 import threading
 import time
 from pathlib import Path
@@ -19,10 +23,17 @@ import uvicorn
 from fsf_core import BusClock, Catalog, MqttBus, SystemClock, find_repo_root, load_site
 
 from .app import create_app
+from .auth import Auth, hash_password
 from .live import Live
 
 
 def main() -> None:
+    if sys.argv[1:2] == ["hash-password"]:
+        first = getpass.getpass("Dashboard password: ")
+        if len(first) < 8 or first != getpass.getpass("Again: "):
+            sys.exit("passwords differ or are shorter than 8 characters")
+        print(hash_password(first))
+        return
     parser = argparse.ArgumentParser(prog="fsf_web")
     parser.add_argument("--site", required=True, help="site directory or site.yaml")
     parser.add_argument("--db", default=os.environ.get("FSF_DB", "hub.db"), help="the hub's SQLite file (opened read-only)")
@@ -33,6 +44,10 @@ def main() -> None:
     parser.add_argument("--host", default=os.environ.get("FSF_WEB_HOST", "127.0.0.1"))
     parser.add_argument("--port", type=int, default=int(os.environ.get("FSF_WEB_PORT", "8080")))
     parser.add_argument("--developer", action="store_true", help="allow downloading the whole database")
+    parser.add_argument("--read-without-login", action="store_true",
+                        default=os.environ.get("FSF_WEB_READ_WITHOUT_LOGIN") == "1", help="anyone who can reach the service may read")
+    parser.add_argument("--no-login", action="store_true", default=os.environ.get("FSF_WEB_NO_LOGIN") == "1",
+                        help="no authentication at all; only with the port published on this machine")
     parser.add_argument("--static", default=os.environ.get("FSF_WEB_STATIC"), help="folder with the built frontend")
     args = parser.parse_args()
 
@@ -54,8 +69,13 @@ def main() -> None:
         time.sleep(0.05)
 
     static = Path(args.static) if args.static else root / "packages" / "web" / "frontend" / "dist"
-    app = create_app(site, catalog, args.db, live, static, developer=args.developer)
-    print(f"web: site {site.id} on http://{args.host}:{args.port} (db {args.db}, clock {args.clock})", flush=True)
+    password_hash = os.environ.get("FSF_WEB_PASSWORD_HASH") or None
+    auth = Auth(password_hash, read_without_login=args.read_without_login, no_login=args.no_login)
+    app = create_app(site, catalog, args.db, live, static, developer=args.developer, auth=auth)
+    access = ("NO LOGIN: anyone who can reach this port can act" if args.no_login
+              else "no password configured: nobody can log in" if not password_hash else "login required"
+              + (" to act, reading is open" if args.read_without_login else ""))
+    print(f"web: site {site.id} on http://{args.host}:{args.port} (db {args.db}, clock {args.clock}); {access}", flush=True)
     try:
         uvicorn.run(app, host=args.host, port=args.port, log_level="warning")
     finally:
