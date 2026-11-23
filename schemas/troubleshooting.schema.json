@@ -1,0 +1,99 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Troubleshooting",
+  "description": "What to do about each status, and guides that start from a symptom",
+  "type": "object",
+  "properties": {
+    "kind": {
+      "const": "Troubleshooting"
+    },
+    "statuses": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "doing": {
+            "type": "string",
+            "description": "What the hub does while the status is active"
+          },
+          "causes": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1
+          },
+          "checks": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1
+          },
+          "clears": {
+            "type": "string",
+            "description": "What makes the status go away"
+          }
+        },
+        "required": [
+          "doing",
+          "causes",
+          "checks",
+          "clears"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "symptoms": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "symptom": {
+            "type": "string"
+          },
+          "statuses": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "parts": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "causes": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1
+          },
+          "checks": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1
+          }
+        },
+        "required": [
+          "symptom",
+          "statuses",
+          "parts",
+          "causes",
+          "checks"
+        ],
+        "additionalProperties": false
+      }
+    }
+  },
+  "required": [
+    "kind",
+    "statuses",
+    "symptoms"
+  ],
+  "additionalProperties": false
+}

@@ -1,8 +1,8 @@
 # Installation, assembly, testing and troubleshooting plan
 
 Status (2026-11-22): the recommended options in section 9 are accepted. Phase I1 is built,
-and so are the software halves of I2 and I3 and the generators of I4; the hardware halves,
-I5 and I6 are not started. Today the system runs only against simulated nodes; this plan is
+and so are the software halves of I2 and I3, the generators of I4, and I5; the hardware
+halves and I6 are not started. Today the system runs only against simulated nodes; this plan is
 the path from that to a working physical installation that someone else can replicate.
 
 How I1 stands:
@@ -85,6 +85,29 @@ How I4 stands:
 - Finding from the power budget: a 20-LED RGBW strip peaks at 1.6 A on 5 V, so every
   example node needs its own 5 V supply for the strip; and the 12 V current of the heat
   wire and the CW/WW strip is not in the catalog, so those supplies cannot be sized yet.
+
+How I5 stands:
+
+- New detections, each with a scenario test that injects the fault, sees the status and
+  clears it: a dose that changes nothing and a heater or humidifier wanted on for hours
+  without progress (`no_effect`), an actuator that does not acknowledge (`actuator_fault`),
+  a sensor that repeats one value for 12 h or reports an impossible one (`sensor_fault`),
+  a reservoir falling with no watering (`water_mismatch`), a node dropping off three times
+  in an hour (`node_unstable`). A week of each healthy example site raises none.
+- "Reservoir drop does not match doses" is reduced to "falls without any dose": the site
+  file does not know the reservoir's volume, so drops cannot be compared with millilitres.
+- An impossible reading is no longer used for control (the loop fails safe).
+- `catalog/troubleshooting.yaml` has a guide for every status and five symptom guides.
+  `fsf docs troubleshooting` writes pages by status, symptom and part plus a markdown
+  version; the dashboard's Help page serves the same entries, linked from banners, the zone
+  page and log rows. The LED legend card does not link to them yet.
+- `fsf doctor` checks hub, nodes, sensors, zones, database, disk, clock and Docker, prints
+  the fix for each failure, and with `--bundle` writes a zip with secrets replaced. It does
+  not check firmware versions (nodes do not report one) or backups (there is no backup
+  command).
+- `docs/agents/diagnose-zone.md` is a guide for an LLM agent. The other agent documents and
+  skills of section 7 are not written.
+- Thresholds and the guides' hardware advice are untested on hardware.
 - Noticed on the way: when the reservoir sensor is silent the hub does not block the pumps
   (no reading is treated as not low). On hardware that should probably fail safe.
 

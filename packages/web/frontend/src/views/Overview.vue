@@ -10,7 +10,8 @@ import { NEEDS_PERSON, statusStyle } from '../status.js'
 const zones = ref([])
 const { error, loading } = useLive(async () => { zones.value = (await get('/zones')).zones })
 
-const banners = (zone) => zone.active.filter((s) => s in NEEDS_PERSON)
+const QUIET = ['ok', 'idle', 'unknown']
+const banners = (zone) => zone.active.filter((s) => s in NEEDS_PERSON || (site.value?.theme.statuses[s]?.meaning && !QUIET.includes(s)))
 const others = (zone) => zone.active.filter((s) => s !== zone.status)
 const offline = (zone) => zone.nodes.filter((n) => n.online === false)
 
@@ -41,6 +42,7 @@ function due(planting) {
       <p v-for="status in banners(zone)" :key="status" class="banner">
         <strong>{{ statusLabel(status) }}.</strong> {{ site?.theme.statuses[status]?.meaning ?? NEEDS_PERSON[status] }}
         <template v-if="status === 'observing' && zone.observing"> Reason: {{ zone.observing }}.</template>
+        <RouterLink :to="`/help/${status}`">What to check</RouterLink>
       </p>
       <p v-if="others(zone).length" class="small muted">
         Also: {{ others(zone).map(statusLabel).join(', ') }}

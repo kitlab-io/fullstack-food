@@ -93,7 +93,8 @@ def test_heater_cannot_run_past_its_max_on_time(mock):
     runs = [(off - on).total_seconds() for (on, a), (off, b) in zip(log, log[1:]) if a and not b]
     assert runs and max(runs) <= 30 * 60 + system.tick              # recipe limit: max_on 30m
     assert any(e["reason"] == "max_on" for e in system.events("limit"))
-    assert system.status("incubation-chamber") == "too_cold"       # the mismatch is visible
+    # the mismatch is visible: it reads cold, and hours of heating have changed nothing
+    assert system.status("incubation-chamber") == "no_effect" and "too_cold" in system.active("incubation-chamber")
 
 
 def test_offline_node_is_reported_and_its_actuators_fall_safe(mock):

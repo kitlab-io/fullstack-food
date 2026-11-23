@@ -17,6 +17,7 @@ from fsf_core import topics
 from fsf_core.catalog import Catalog, Device, Planting, Site
 from fsf_core.durations import seconds
 
+from .detect import Detector, plausible
 from .store import Store
 
 LOW_STATUS = {"air_temperature": "too_cold", "soil_temperature": "too_cold",
@@ -79,6 +80,7 @@ class Hub:
         self.commissioning: dict[tuple[str, str, str], dict] = {}   # (scope, subject, step) -> latest record
         self._observed_last: set[str] = set()
         self._bad_topics: set[str] = set()
+        self.detect = Detector(self)
         self._observing: dict[str, str | None] | None = None     # cache; cleared when modes or records change
         self._role_quantities = {c["id"]: [m["quantity"] for m in c.get("measures", [])]
                                  for c in catalog.items["Component"].values()}
@@ -149,9 +151,10 @@ class Hub:
             return
         now = self.clock.now()
         self._latest[device_id] = (now, data)
-        if self.record_readings:
-            for key, value in data.items():
-                if key != "t" and isinstance(value, (int, float)) and not isinstance(value, bool):
+        for key, value in data.items():
+            if key != "t" and isinstance(value, (int, float)) and not isinstance(value, bool):
+                self.detect.reading(device_id, key, value, now)
+                if self.record_readings:
                     self.store.reading(now, device_id, key, value)
 
     def _payload(self, topic: str, payload: bytes) -> dict | None:
@@ -173,6 +176,8 @@ class Hub:
         online = payload.decode(errors="replace") == "online"
         if self._node_online.get(node) != online and node in self.site.nodes:
             self.store.event(self.clock.now(), "node_status", node=node, online=online)
+            if node in self._node_online:       # the first message after a start is not a change
+                self.detect.node_changed(node, online, self.clock.now())
         self._node_online[node] = online
         if not online:
             # Commands sent while a node is away are lost, so forget what we asked of it.
@@ -191,6 +196,7 @@ class Hub:
             return
         now = self.clock.now()
         known = self.store.ack(now, ack.get("id", ""), bool(ack.get("ok")), ack.get("error"))
+        self.detect.acked(str(ack.get("id", "")), now)
         if known and not ack.get("ok"):
             self.store.event(now, "command_failed", level="warn", device=device_id, command_id=ack["id"],
                              error=ack.get("error"))
@@ -482,6 +488,7 @@ class Hub:
             for dev in self.site.zone_devices(zone_id, cls="actuator"):
                 self._act.pop(dev.id, None)
         self._observed_last = observed
+        self.detect.tick(now)
         for zone_id in self.site.zones:
             if self._zones is None or zone_id in self._zones:
                 self._run_zone(zone_id, occupants.get(zone_id), now)
@@ -599,8 +606,10 @@ class Hub:
             fresh = seen is not None and (now - seen[0]).total_seconds() <= stale_after
             in_grace = seen is None and (now - self.started_at).total_seconds() <= stale_after
             for quantity in expected:
-                if fresh and isinstance(seen[1].get(quantity), (int, float)):
-                    values[quantity] = seen[1][quantity]
+                if fresh and isinstance(seen[1].get(quantity), (int, float)) and plausible(quantity, seen[1][quantity]):
+                    values[quantity] = seen[1][quantity]        # a value that cannot be real is not trusted
+                elif fresh and isinstance(seen[1].get(quantity), (int, float)):
+                    pass                                        # reporting, but nonsense: sensor_fault, not sensor_stale
                 elif not in_grace:
                     stale.add(quantity)
         return values, stale - set(values)
@@ -666,12 +675,13 @@ class Hub:
                 active.add("reservoir_low")
             if state.ready:
                 active.add("stage_ready")
+        active |= self.detect.zone(zone_id, stage, readings, self.observing(zone_id) is not None, now)
         for dev_id, dev in actuators.items():
             if dev_id not in handled:   # nothing in this stage uses it: keep it off
                 self._drive(dev, False, None, {}, now)
 
         if not stage:
-            top = "offline" if offline else "paused" if paused else "idle"
+            top = self._top_status(active - {"observing"}) if active - {"observing"} else "idle"
         else:
             top = self._top_status(active)
         status = {"t": now.isoformat(), "state": top, "active": sorted(active),
@@ -850,6 +860,9 @@ class Hub:
         act.busy_until = now + timedelta(seconds=duration)
         self._debounce.pop(("dose", state.id, loop["id"]), None)
         extra = {"observed": True} if self.observing(zone_id) else {}
+        if not extra:
+            value = self._readings(zone_id, now)[0].get(loop["trigger"]["quantity"])
+            self.detect.dosed(zone_id, loop, value, now)
         self.store.event(now, "dose", zone=zone_id, planting=state.id, loop=loop["id"],
                          device=dev.id, volume_ml=volume, duration_s=duration, by=by, **extra)
         return duration
@@ -950,6 +963,8 @@ class Hub:
         cmd = {"id": uuid.uuid4().hex[:12], **cmd}
         self.store.command(self.clock.now(), cmd["id"], dev.id, cmd["name"],
                            {k: v for k, v in cmd.items() if k not in ("id", "name")})
+        if dev.cls == "actuator":
+            self.detect.sent(dev.id, cmd["id"], self.clock.now())
         self.bus.publish(topics.device(self.site.id, dev.node, dev.id, "cmd"), cmd)
 
     # ------------------------------------------------------------------ LEDs

@@ -19,7 +19,7 @@ export async function get(path, params) {
   return parse(await fetch(`/api${path}${query}`))
 }
 
-async function post(path, body) {
+export async function post(path, body) {
   return parse(await fetch(`/api${path}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': session.value?.csrf ?? '' },
@@ -44,8 +44,10 @@ export const act = (command) => post('/commands', command)
 
 // ---- site description (fetched once)
 export const site = ref(null)
+export const simulated = ref(false)        // a simulator is on the bus: show its page
 let sitePromise = null
 export function loadSite() {
+  get('/sim').then((sim) => { simulated.value = sim.present }).catch(() => {})
   sitePromise ??= get('/site').then((data) => (site.value = data)).catch((err) => { sitePromise = null; throw err })
   return sitePromise
 }

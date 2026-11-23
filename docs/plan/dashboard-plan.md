@@ -1,7 +1,7 @@
 # Web dashboard plan
 
 Status (2026-11-22): the recommended options in section 9 are accepted. Phases D1 and D2
-to D4 are built; D5 is not started. It builds on the hub, simulator and
+to D5 are built. It builds on the hub, simulator and
 MQTT contract described in `AGENTS.md`.
 
 How D1 differs from the text below:
@@ -67,6 +67,26 @@ How D4 stands:
   override, a refusal and a test pulse. It passed here against the mock stack through
   Microsoft Edge; it is skipped unless `FSF_BROWSER_URL` is set, so CI does not run it.
 - Not done: broker ACLs for the web service (plan phase 6), HTTPS, per-person accounts.
+
+How D5 stands:
+
+- The simulator publishes a retained `sim/state` and takes commands on `sim/cmd`: speed,
+  pause, and every fault injection (sensor silent or frozen, node offline, pump without
+  flow, actuator silent or without effect, reservoir level, room temperature and humidity).
+  The dashboard's Simulator page appears only when that state is on the bus.
+- Accessibility pass: skip link, labelled dialogs, a text summary on every chart, form
+  controls with names, status never by colour alone, reduced-motion respected. Not audited
+  with a screen reader or a contrast tool.
+- Phone layout: every page was checked at 375 px for overflow when it was built; the
+  Simulator, Help and Log pages were not re-checked on a phone after their last changes.
+- Performance: on a development laptop the six requests of a zone page for a 21-day
+  mushroom grow (36 MB database) take 77 ms in total. That has not been measured on a
+  Raspberry Pi Zero 2 W, so the one-second budget is unconfirmed.
+- The demo script is in the README, and `tests/browser/` runs its steps in a real browser:
+  a fault from the Simulator page shows on the overview, leads to its guide and clears, and
+  a mushroom grow is advanced to its end.
+- Still open across the dashboard plan: browser tests in CI, broker ACLs, HTTPS, which
+  recipe layer set each target, the publish tool.
 
 ## 1. Goals
 

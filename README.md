@@ -39,6 +39,25 @@ To move a planting to its next stage (for example mushrooms from incubation to f
 docker compose -f deploy/compose/base.yaml -f deploy/compose/mock.yaml exec broker mosquitto_pub -t fsf/mushrooms/hub/cmd -m '{"id":"a1","name":"advance_stage","planting":"oyster-1"}'
 ```
 
+### A ten-minute demo
+
+With the mushrooms site running (`FSF_SITE=mushrooms FSF_SPEED=120 docker compose ... up --build`), open
+http://localhost:8080.
+
+1. **Zones**: the incubation chamber warms up towards its band; its card has the same colour
+   and effect as its LED segment. Open it for charts and for why the heater is on or off.
+2. **Simulator**: set the speed to 10 min per second, then press *Stop reporting* on `inc-air`.
+3. **Zones** again: within a second or two the chamber shows *Sensor not reporting*. Follow
+   *What to check* to the guide: what the hub is doing (the heater is held off), likely
+   causes, checks, and when it clears.
+4. **Log**: the status change and the heater's `fail-safe: reading stale` decision are there,
+   each opening to its full record. **Raw data** shows the MQTT traffic behind it.
+5. **Simulator**: *Remove all faults*. The status clears by itself.
+6. Back on the incubation chamber: *Advance to fruiting*. The confirmation names the chamber
+   the planting moves to; afterwards the fruiting chamber runs its humidity, fan and light.
+
+`tests/browser/` does the same in a real browser, with the login switched on.
+
 ## Towards real hardware
 
 Nothing below has been run on a board yet.
@@ -55,6 +74,10 @@ Then commission in stages, each recorded by the hub: `fsf bench <device>`, `fsf 
 <device>`, `fsf zone test <zone>`, and finally `fsf zone mode <zone> active`. A zone with an
 actuator that has not passed its bench test stays in observe mode: the hub logs what it
 would do and switches nothing.
+
+When something is wrong: `fsf doctor --site <site> --db <hub db>` prints a pass/fail list with
+the fix for each failure, `fsf docs troubleshooting` writes the guides by status, symptom and
+part, and the dashboard's Help page shows the same guides next to the live status.
 
 `fsf node test` runs the same contract checks the simulated nodes pass: payloads match
 `schemas/mqtt/`, an on-command ends by itself, `off` is honoured. With `--actuate` it switches

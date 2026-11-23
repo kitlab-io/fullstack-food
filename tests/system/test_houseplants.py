@@ -53,7 +53,8 @@ def test_empty_reservoir_blocks_the_pump_and_shows_reservoir_low(mock):
     assert system.events("dose") == []
     assert system.sim.actuators["pothos-pump"].on_seconds == 0
     assert system.status("pothos-window") == "reservoir_low"
-    assert set(system.active("pothos-window")) == {"reservoir_low", "needs_water"}
+    # It was full a moment ago and nothing was watered, so the hub also suspects a leak.
+    assert set(system.active("pothos-window")) == {"reservoir_low", "needs_water", "water_mismatch"}
     led = system.led("pothos-window")
     assert (led["color"], led["effect"]) == (BLUE, "blink")
     # Both pots draw from this reservoir, so both report it.

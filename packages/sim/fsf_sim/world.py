@@ -79,7 +79,11 @@ class Sim:
         self.dropouts: set[str] = set()
         self.stuck: dict[tuple[str, str], float] = {}
         self.no_flow: set[str] = set()
+        self.ignoring: set[str] = set()                 # actuators that neither act nor acknowledge
+        self.weak: dict[str, float] = {}                # actuator -> fraction of its normal effect
         self._last_report: datetime | None = None
+        self.speed = 1.0                                # simulated seconds per real second; used by the run loop
+        self.paused = False
 
     # ------------------------------------------------------------------ lifecycle
 
@@ -89,6 +93,8 @@ class Sim:
             self.bus.publish(topics.node_status(sid, node), "online", retain=True)
         self.bus.subscribe(f"{topics.ROOT}/{sid}/+/+/cmd", self._on_cmd)
         self.bus.subscribe(f"{topics.ROOT}/{sid}/zone/+/status", self._on_zone_status)
+        self.bus.subscribe(topics.sim_cmd(sid), self._on_sim_cmd)
+        self.publish_state()
         now = self.clock.now()
         for act in self.actuators.values():
             self._publish_actuator(act, now)
@@ -123,6 +129,17 @@ class Sim:
         """The pump runs but moves no water (airlock, kinked tube)."""
         (self.no_flow.add if active else self.no_flow.discard)(device_id)
 
+    def actuator_ignores(self, device_id: str, active: bool = True) -> None:
+        """The actuator is dead: commands reach the node but nothing switches and nothing is acknowledged."""
+        (self.ignoring.add if active else self.ignoring.discard)(device_id)
+
+    def actuator_weak(self, device_id: str, fraction: float | None) -> None:
+        """The actuator runs but has only this fraction of its effect (0 for none). Pass None to clear."""
+        if fraction is None:
+            self.weak.pop(device_id, None)
+        else:
+            self.weak[device_id] = fraction
+
     def set_reservoir(self, device_id: str, volume_ml: float) -> None:
         self.reservoirs[device_id]["volume_ml"] = volume_ml
 
@@ -132,11 +149,68 @@ class Sim:
         if relative_humidity is not None:
             self.ambient["relative_humidity"] = relative_humidity
 
+    # ------------------------------------------------------------------ control over the bus
+
+    def state(self) -> dict:
+        amb = self.ambient
+        return {"t": self.clock.now().isoformat(), "speed": self.speed, "paused": self.paused,
+                "ambient": {"air_temperature": amb["air_temperature"]["mean"], "relative_humidity": amb["relative_humidity"]},
+                "faults": {"dropouts": sorted(self.dropouts),
+                           "stuck": [{"device": d, "quantity": q, "value": v} for (d, q), v in sorted(self.stuck.items())],
+                           "offline_nodes": sorted(self.offline_nodes), "no_flow": sorted(self.no_flow),
+                           "ignoring": sorted(self.ignoring), "weak": dict(sorted(self.weak.items()))}}
+
+    def publish_state(self) -> None:
+        self.bus.publish(topics.sim_state(self.site.id), self.state(), retain=True)
+
+    def clear_faults(self) -> None:
+        for node in list(self.offline_nodes):
+            self.node_offline(node, False)
+        self.dropouts.clear()
+        self.stuck.clear()
+        self.no_flow.clear()
+        self.ignoring.clear()
+        self.weak.clear()
+
+    def _on_sim_cmd(self, topic: str, payload: bytes) -> None:
+        """Speed, pause and the fault injections above, for the dashboard's simulator page. Bad commands are ignored."""
+        try:
+            cmd = json.loads(payload)
+            name = cmd["name"]
+            device, active = cmd.get("device"), cmd.get("active", True)
+            if device is not None and device not in self.site.devices:
+                return
+            if name == "set_speed":
+                self.speed = min(3600.0, max(1.0, float(cmd["speed"])))
+            elif name in ("pause", "resume"):
+                self.paused = name == "pause"
+            elif name == "sensor_dropout":
+                self.sensor_dropout(device, active)
+            elif name == "sensor_stuck":
+                self.sensor_stuck(device, cmd["quantity"], cmd["value"])
+            elif name == "node_offline" and cmd["node"] in self.site.nodes:
+                self.node_offline(cmd["node"], active)
+            elif name == "pump_no_flow":
+                self.pump_no_flow(device, active)
+            elif name == "actuator_ignores":
+                self.actuator_ignores(device, active)
+            elif name == "actuator_weak":
+                self.actuator_weak(device, cmd["fraction"])
+            elif name == "set_reservoir" and device in self.reservoirs:
+                self.set_reservoir(device, self.reservoirs[device]["capacity_ml"] * float(cmd["percent"]) / 100.0)
+            elif name == "set_ambient":
+                self.set_ambient(cmd.get("air_temperature"), cmd.get("relative_humidity"))
+            elif name == "clear_faults":
+                self.clear_faults()
+        except (ValueError, KeyError, TypeError):
+            return
+        self.publish_state()
+
     # ------------------------------------------------------------------ commands from the hub
 
     def _on_cmd(self, topic: str, payload: bytes) -> None:
         _, _, node, device_id, _ = topic.split("/")
-        if node in self.offline_nodes or device_id not in self.site.devices:
+        if node in self.offline_nodes or device_id not in self.site.devices or device_id in self.ignoring:
             return
         cmd = json.loads(payload)
         now = self.clock.now()
@@ -213,6 +287,7 @@ class Sim:
                 act = self.actuators[dev.id]
                 f = self._on_fraction(act, start, now)
                 act.on_seconds += f * dt
+                f *= self.weak.get(dev.id, 1.0)
                 for role in dev.roles:
                     kind = role.split(".")[1]
                     if kind in frac:

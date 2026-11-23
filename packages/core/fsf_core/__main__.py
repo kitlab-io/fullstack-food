@@ -10,6 +10,8 @@
     fsf zone mode <zone> observe|active     compute-only or really switching
     fsf zone test <zone> --site <site>      shortened acceptance run of a zone in observe mode
     fsf commissioning --site <site>         what has been tested so far
+    fsf doctor --site <site>                health check of a running installation
+    fsf docs troubleshooting                troubleshooting pages by status, symptom and part
 """
 
 from __future__ import annotations
@@ -24,8 +26,16 @@ from .catalog import Catalog, ConfigError, find_repo_root, load_site
 
 
 def _validate(args, root: Path, catalog: Catalog) -> int:
+    from .troubleshooting import load as load_troubleshooting
+
+    try:
+        guides = load_troubleshooting(catalog)
+    except ConfigError as err:
+        print("catalog: INVALID")
+        print("\n".join(f"  {p}" for p in err.problems))
+        return 1
     counts = ", ".join(f"{len(v)} {k.lower()}" for k, v in catalog.items.items())
-    print(f"catalog: ok ({counts})")
+    print(f"catalog: ok ({counts}, {len(guides['statuses'])} status guides)")
     sites = [Path(s) for s in args.sites] or sorted((root / "sites" / "examples").glob("*/site.yaml"))
     failed = False
     for path in sites:
@@ -70,6 +80,12 @@ def _firmware(args, root: Path, catalog: Catalog) -> int:
 def _docs(args, root: Path, catalog: Catalog) -> int:
     from .builddocs import build, power_budget
 
+    if args.action == "troubleshooting":
+        from .troubleshooting import build as build_troubleshooting
+
+        for path in build_troubleshooting(catalog, Path(args.out) if args.out else root / "build" / "docs" / "troubleshooting"):
+            print(f"wrote {path}")
+        return 0
     site = load_site(args.site, catalog)
     out_dir = Path(args.out) if args.out else root / "build" / "docs" / site.id
     for path in build(site, catalog, out_dir):
@@ -107,6 +123,39 @@ def _node_test(args, root: Path, catalog: Catalog) -> int:
     except ValueError as err:
         print(f"node test: {err}")
         return 1
+    finally:
+        bus.close()
+    for check in checks:
+        print(check)
+    failed = sum(not c.ok for c in checks)
+    print(f"{len(checks) - failed} passed, {failed} failed")
+    return 1 if failed else 0
+
+
+def _doctor(args, root: Path, catalog: Catalog) -> int:
+    from .bus import MqttBus
+    from .doctor import Doctor
+
+    site = load_site(args.site, catalog)
+    print(f"site {site.id}: valid")
+    try:
+        bus = MqttBus(args.mqtt_host, args.mqtt_port, client_id=f"fsf-doctor-{site.id}",
+                      username=os.environ.get("FSF_MQTT_USERNAME"), password=os.environ.get("FSF_MQTT_PASSWORD"))
+    except OSError as err:
+        print(f"FAIL  broker is reachable: {err}. Fix: check --mqtt-host and that the broker is running")
+        return 1
+
+    def wait(seconds: float) -> None:
+        deadline = time.monotonic() + seconds
+        while time.monotonic() < deadline:
+            bus.poll()
+            time.sleep(0.05)
+
+    try:
+        doctor = Doctor(site, catalog, bus, wait, db_path=args.db)
+        checks = doctor.run()
+        if args.bundle:
+            print(f"wrote {doctor.bundle(checks, Path(args.bundle))} (secrets replaced)")
     finally:
         bus.close()
     for check in checks:
@@ -211,6 +260,9 @@ def main(argv: list[str] | None = None) -> int:
     docs_build.add_argument("site", help="site directory or site.yaml")
     docs_build.add_argument("--out", help="output folder (default: build/docs/<site id>)")
 
+    docs_trouble = docs.add_parser("troubleshooting", help="troubleshooting pages by status, symptom and part")
+    docs_trouble.add_argument("--out", help="output folder (default: build/docs/troubleshooting)")
+
     node = sub.add_parser("node", help="work with one node").add_subparsers(dest="action", required=True)
     test = node.add_parser("test", help="run the node contract suite against a broker")
     test.add_argument("node")
@@ -243,6 +295,10 @@ def main(argv: list[str] | None = None) -> int:
     ztest.add_argument("--minutes", type=float, default=30.0, help="how long to run")
     broker(ztest)
     broker(sub.add_parser("commissioning", help="list what has been tested"))
+    doctor = sub.add_parser("doctor", help="health check of a running installation, with the fix for each failure")
+    broker(doctor)
+    doctor.add_argument("--db", help="the hub's database file, to check storage")
+    doctor.add_argument("--bundle", help="also write a diagnostics zip with secrets replaced")
     args = parser.parse_args(argv)
 
     root = find_repo_root(Path.cwd())
@@ -253,10 +309,10 @@ def main(argv: list[str] | None = None) -> int:
         print("\n".join(f"  {p}" for p in err.problems))
         return 1
     try:
-        handler = {"validate": _validate, "firmware": _firmware, "node": _node_test, "docs": _docs}.get(args.command, _commissioning)
+        handler = {"validate": _validate, "firmware": _firmware, "node": _node_test, "docs": _docs, "doctor": _doctor}.get(args.command, _commissioning)
         return handler(args, root, catalog)
     except ConfigError as err:
-        print(f"site {args.site}: INVALID")
+        print(f"site {getattr(args, 'site', '')}: INVALID")
         print("\n".join(f"  {p}" for p in err.problems))
         return 1
 

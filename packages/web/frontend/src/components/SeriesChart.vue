@@ -2,7 +2,7 @@
 // One quantity over time: mean line, min/max envelope when the data is rolled up, the
 // target band shaded behind it, and a vertical line where each stage began.
 import uPlot from 'uplot'
-import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 
 import { number, quantityLabel, unit } from '../format.js'
 
@@ -14,6 +14,14 @@ const props = defineProps({
 })
 
 const host = ref(null)
+// What the picture shows, for people who cannot see it.
+const summary = computed(() => {
+  const values = props.series.mean.filter((v) => v !== null)
+  if (!values.length) return `${quantityLabel(props.series.quantity)}: no readings in this range`
+  const u = unit(props.series.unit)
+  return `${quantityLabel(props.series.quantity)} from ${number(Math.min(...values), props.series.quantity)} to ` +
+    `${number(Math.max(...values), props.series.quantity)} ${u}, latest ${number(values[values.length - 1], props.series.quantity)} ${u}`
+})
 let plot = null
 let observer = null
 
@@ -133,7 +141,7 @@ watch(() => [props.series, props.band, props.marks], draw)
       <strong>{{ quantityLabel(series.quantity) }}</strong>
       <span class="hint">{{ series.device }} · {{ series.resolution === 'raw' ? 'every sample' : `${series.resolution} averages with min and max` }}</span>
     </figcaption>
-    <div ref="host" class="plot"></div>
+    <div ref="host" class="plot" role="img" :aria-label="summary"></div>
     <p v-if="!series.t.length" class="empty">No readings in this range yet.</p>
   </figure>
 </template>

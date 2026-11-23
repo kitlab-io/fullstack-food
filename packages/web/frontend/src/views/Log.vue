@@ -97,6 +97,8 @@ function toggle(id) {
       <div v-if="open.has(row.id)" class="detail">
         <pre>{{ JSON.stringify({ kind: row.kind, ...row.data }, null, 2) }}</pre>
         <RouterLink v-if="row.zone" :to="`/zones/${row.zone}`">Charts for {{ row.zone }}</RouterLink>
+        <RouterLink v-if="row.data.status" :to="`/help/${row.data.status}`">What to check for {{ row.data.status.replaceAll('_', ' ') }}</RouterLink>
+        <RouterLink v-else-if="row.kind === 'status_changed'" :to="`/help/${row.data.state}`">What {{ row.data.state.replaceAll('_', ' ') }} means</RouterLink>
       </div>
     </li>
   </ul>

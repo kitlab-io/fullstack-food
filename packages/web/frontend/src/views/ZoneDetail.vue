@@ -70,6 +70,9 @@ const led = computed(() => zone.value.led)
         <StatusBadge :status="zone.status" large />
       </div>
       <p v-if="others.length" class="muted">Also: {{ others.map(statusLabel).join(', ') }}</p>
+      <p v-if="!['ok', 'idle', 'unknown'].includes(zone.status)" class="row">
+        <RouterLink v-for="s in zone.active" :key="s" :to="`/help/${s}`">{{ statusLabel(s) }}: what to check</RouterLink>
+      </p>
       <p v-if="zone.observing" class="banner">
         Observe mode ({{ zone.observing }}): decisions below are what the hub would do; nothing is switched.
       </p>

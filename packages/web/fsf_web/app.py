@@ -11,7 +11,6 @@ from __future__ import annotations
 import csv
 import io
 import json
-import re
 import tempfile
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -22,7 +21,9 @@ from jsonschema import Draft202012Validator
 from starlette.background import BackgroundTask
 from fastapi.staticfiles import StaticFiles
 
-from fsf_core import Catalog, Site, find_repo_root, seconds
+from fsf_core import Catalog, Site, find_repo_root, seconds, topics
+from fsf_core import troubleshooting
+from fsf_core.doctor import redact
 from fsf_hub import Store
 
 from .auth import COOKIE, SESSION_S, Auth, LoginError
@@ -41,10 +42,9 @@ LEVELS = ("debug", "info", "warn", "error")
 LOG_SCAN = 5000                 # newest rows read from each table before filtering
 GROUPS = {"dose": "dose", "stage_advanced": "stage", "planting_started": "stage", "planting_finished": "stage",
           "status_changed": "status", "limit": "limit", "interlock": "interlock", "node_status": "node",
-          "bad_payload": "node",
+          "bad_payload": "node", "detection": "detection", "detection_cleared": "detection",
           "command": "command", "command_rejected": "command", "command_failed": "command", "actuator_test": "command",
           "override_cleared": "command", "zone_resumed": "command"}
-SECRET_KEY = re.compile(r"pass|secret|token|key|credential", re.IGNORECASE)
 
 
 def describe(kind: str, e: dict) -> str:
@@ -77,6 +77,10 @@ def describe(kind: str, e: dict) -> str:
         return f"{e['device']} refused a command: {e.get('error')}"
     if kind == "actuator_test":
         return f"test pulse on {e['device']} for {e['duration_s']:g} s"
+    if kind == "detection":
+        return f"{e['status'].replace('_', ' ')}: {e['detail']}"
+    if kind == "detection_cleared":
+        return f"{e['status'].replace('_', ' ')} cleared ({e['subject']})"
     if kind == "bad_payload":
         return f"{e['device']} sent a message that is not a JSON object"
     if kind == "override_cleared":
@@ -84,16 +88,6 @@ def describe(kind: str, e: dict) -> str:
     if kind == "zone_resumed":
         return f"resumed ({e['reason']})"
     return kind.replace("_", " ")
-
-
-def redact(node):
-    """A copy with the value of anything that looks like a secret replaced."""
-    if isinstance(node, dict):
-        return {k: "<redacted>" if SECRET_KEY.search(str(k)) and not isinstance(v, (dict, list)) else redact(v)
-                for k, v in node.items()}
-    if isinstance(node, list):
-        return [redact(item) for item in node]
-    return node
 
 
 def as_file(rows: list[dict], columns: list[str], fmt: str, name: str) -> Response:
@@ -153,6 +147,8 @@ def create_app(site: Site, catalog: Catalog, db_path: str, live: Live, static_di
     auth = auth or Auth()
     command_schema = Draft202012Validator(json.loads(
         (find_repo_root() / "schemas" / "mqtt" / "hub_command.schema.json").read_text(encoding="utf-8")))
+    sim_schema = Draft202012Validator(json.loads(
+        (find_repo_root() / "schemas" / "mqtt" / "sim_command.schema.json").read_text(encoding="utf-8")))
 
     @app.middleware("http")
     async def guard(request: Request, call_next):
@@ -313,6 +309,39 @@ def create_app(site: Site, catalog: Catalog, db_path: str, live: Live, static_di
                                "stages": [{"id": s["id"], "duration": s.get("duration"), "targets": s["targets"],
                                            "zone_role": s.get("zone_role")} for s in p.recipe["stages"]]}
                               for p in site.plantings.values()]}
+
+    @app.get("/api/sim")
+    def get_sim() -> dict:
+        """The simulator's state, when this is a simulated site. `present` is false on real hardware."""
+        state = live.snapshot()["sim"]
+        return {"present": state is not None, "now": live.now().isoformat(), **(state or {})}
+
+    @app.post("/api/sim")
+    def post_sim(body: dict = Body(...)) -> dict:
+        """Speed, pause and fault injection. Reaches only a simulator: real nodes do not listen on this topic."""
+        if live.snapshot()["sim"] is None:
+            raise HTTPException(409, "no simulator is running on this site")
+        errors = [e.message for e in sim_schema.iter_errors(body)]
+        if errors:
+            raise HTTPException(422, "; ".join(errors))
+        live.bus.publish(topics.sim_cmd(site.id), body)
+        return {"sent": True}
+
+    @app.get("/api/help")
+    def get_help_index() -> dict:
+        """Every status that has a guide, in the order the strip prioritises them, and the symptom guides."""
+        doc = troubleshooting.load(catalog, site.theme["id"])
+        return {"statuses": [{"status": s, "label": site.theme["statuses"][s].get("label", s),
+                              "meaning": site.theme["statuses"][s].get("meaning", "")}
+                             for s in site.theme["priority"] if s in doc["statuses"]],
+                "symptoms": doc["symptoms"]}
+
+    @app.get("/api/help/{status}")
+    def get_help(status: str) -> dict:
+        entry = troubleshooting.for_status(catalog, status, site.theme["id"])
+        if entry is None:
+            raise HTTPException(404, f"no troubleshooting guide for {status!r}")
+        return entry
 
     @app.get("/api/zones")
     def get_zones() -> dict:

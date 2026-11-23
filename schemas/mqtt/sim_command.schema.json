@@ -1,0 +1,220 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Simulator command",
+  "description": "fsf/<site>/sim/cmd. Only a simulator listens. Fault injection and time control for demos and manual tests.",
+  "type": "object",
+  "properties": {
+    "name": {
+      "enum": [
+        "set_speed",
+        "pause",
+        "resume",
+        "sensor_dropout",
+        "sensor_stuck",
+        "node_offline",
+        "pump_no_flow",
+        "actuator_ignores",
+        "actuator_weak",
+        "set_reservoir",
+        "set_ambient",
+        "clear_faults"
+      ]
+    },
+    "speed": {
+      "type": "number",
+      "minimum": 1,
+      "maximum": 3600,
+      "description": "Simulated seconds per real second"
+    },
+    "device": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9._-]*$"
+    },
+    "node": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9._-]*$"
+    },
+    "quantity": {
+      "type": "string"
+    },
+    "active": {
+      "type": "boolean",
+      "description": "false removes the fault"
+    },
+    "value": {
+      "type": [
+        "number",
+        "null"
+      ],
+      "description": "sensor_stuck: the value to repeat; null removes the fault"
+    },
+    "fraction": {
+      "type": [
+        "number",
+        "null"
+      ],
+      "minimum": 0,
+      "maximum": 1,
+      "description": "actuator_weak: share of its normal effect"
+    },
+    "percent": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 100
+    },
+    "air_temperature": {
+      "type": "number"
+    },
+    "relative_humidity": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 100
+    }
+  },
+  "required": [
+    "name"
+  ],
+  "additionalProperties": false,
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "name": {
+            "const": "set_speed"
+          }
+        },
+        "required": [
+          "name"
+        ]
+      },
+      "then": {
+        "required": [
+          "speed"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "name": {
+            "const": "sensor_dropout"
+          }
+        },
+        "required": [
+          "name"
+        ]
+      },
+      "then": {
+        "required": [
+          "device"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "name": {
+            "const": "sensor_stuck"
+          }
+        },
+        "required": [
+          "name"
+        ]
+      },
+      "then": {
+        "required": [
+          "device",
+          "quantity",
+          "value"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "name": {
+            "const": "node_offline"
+          }
+        },
+        "required": [
+          "name"
+        ]
+      },
+      "then": {
+        "required": [
+          "node"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "name": {
+            "const": "pump_no_flow"
+          }
+        },
+        "required": [
+          "name"
+        ]
+      },
+      "then": {
+        "required": [
+          "device"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "name": {
+            "const": "actuator_ignores"
+          }
+        },
+        "required": [
+          "name"
+        ]
+      },
+      "then": {
+        "required": [
+          "device"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "name": {
+            "const": "actuator_weak"
+          }
+        },
+        "required": [
+          "name"
+        ]
+      },
+      "then": {
+        "required": [
+          "device",
+          "fraction"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "name": {
+            "const": "set_reservoir"
+          }
+        },
+        "required": [
+          "name"
+        ]
+      },
+      "then": {
+        "required": [
+          "device",
+          "percent"
+        ]
+      }
+    }
+  ]
+}

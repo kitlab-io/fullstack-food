@@ -36,6 +36,10 @@ firmware site *args:
 docs site *args:
     uv run fsf docs build {{site}} {{args}}
 
+# Health check of a running installation: just doctor --site sites/local/my-site --db hub.db
+doctor *args:
+    uv run fsf doctor {{args}}
+
 # Run the node contract suite against a broker: just node-test shelf-node --site sites/local/my-site --actuate
 node-test node *args:
     uv run fsf node test {{node}} {{args}}

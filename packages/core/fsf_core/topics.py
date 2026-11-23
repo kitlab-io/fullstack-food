@@ -40,6 +40,17 @@ def clock(site: str) -> str:
     return f"{ROOT}/{site}/sim/clock"
 
 
+def sim_state(site: str) -> str:
+    """Retained, published only by the simulator: speed, pause and the faults currently injected.
+    Its presence is how the dashboard knows it is looking at a simulated site."""
+    return f"{ROOT}/{site}/sim/state"
+
+
+def sim_cmd(site: str) -> str:
+    """Commands to the simulator (schemas/mqtt/sim_command.schema.json): speed, pause, fault injection."""
+    return f"{ROOT}/{site}/sim/cmd"
+
+
 def matches(pattern: str, topic: str) -> bool:
     """MQTT topic filter matching with + and # wildcards."""
     p_parts, t_parts = pattern.split("/"), topic.split("/")

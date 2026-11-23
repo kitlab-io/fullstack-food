@@ -2,7 +2,8 @@ kind: Theme
 id: default
 brightness: { day: 0.5, night: 0.05, night_hours: [22, 7] }
 # Highest priority first. A zone shows the first status in this list that is active.
-priority: [offline, paused, sensor_stale, critical, reservoir_low, too_hot, too_cold, needs_water,
+priority: [offline, paused, sensor_stale, sensor_fault, critical, actuator_fault, no_effect, reservoir_low,
+           water_mismatch, node_unstable, too_hot, too_cold, needs_water,
            too_wet, too_dry, too_humid, stale_air, stage_ready, observing, ok, idle]
 # Colours are [R, G, B, W]. Every status also has a distinct effect or hue family so
 # states stay distinguishable without relying on red/green alone.
@@ -39,3 +40,13 @@ statuses:
                    label: "Paused", meaning: "Someone paused this zone. Everything is off until it is resumed on the dashboard." }
   observing:     { color: [0, 70, 90, 0],    effect: breathe,
                    label: "Observing only", meaning: "The hub is logging what it would do but switching nothing, until the zone is commissioned." }
+  sensor_fault:  { color: [255, 0, 255, 0],  effect: breathe,
+                   label: "Sensor reading wrong", meaning: "A sensor repeats one value or reports something impossible. Its readings are not trusted. Check the sensor." }
+  actuator_fault: { color: [255, 60, 0, 0],  effect: blink,
+                   label: "Actuator not responding", meaning: "A pump, heater, fan or light does not acknowledge commands. Check its node, wiring and power." }
+  no_effect:     { color: [255, 60, 0, 0],   effect: breathe,
+                   label: "No effect", meaning: "Something is running but changing nothing: a dry pump, a kinked tube, a heater too weak. Look at the actuator." }
+  water_mismatch: { color: [0, 0, 255, 0],   effect: blink_slow,
+                   label: "Reservoir losing water", meaning: "The reservoir level is falling although nothing was watered. Look for a leak or a siphoning tube." }
+  node_unstable: { color: [255, 0, 255, 0],  effect: solid,
+                   label: "Node unstable", meaning: "A node keeps dropping off the network. Check its WiFi signal and its power supply." }

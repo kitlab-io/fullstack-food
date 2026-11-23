@@ -183,7 +183,8 @@ def test_live_state_is_complete_for_a_service_started_late(served):
 def test_api_never_writes_and_reports_a_missing_database(served, tmp_path):
     system, client = served("houseplants")
     writing = {route.path for route in client.app.routes if not getattr(route, "methods", {"GET"}) <= {"GET", "HEAD"}}
-    assert writing == {"/api/login", "/api/logout", "/api/commands"}       # the one way to act goes through the hub
+    # acting goes through the hub; /api/sim reaches only a simulator
+    assert writing == {"/api/login", "/api/logout", "/api/commands", "/api/sim"}
     missing = TestClient(create_app(system.site, system.catalog, str(tmp_path / "nope.db"), system.live, auth=Auth(no_login=True)))
     assert missing.get("/api/zones").status_code == 200                # live state needs no database
     assert missing.get("/api/zones/pothos-window").status_code == 503

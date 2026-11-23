@@ -1,9 +1,10 @@
 <script setup>
 // A modal confirmation. Open it with the exposed ask(), which resolves true or false.
-import { ref } from 'vue'
+import { ref, useId } from 'vue'
 
 defineProps({ title: { type: String, required: true }, confirmLabel: { type: String, default: 'Confirm' } })
 const dialog = ref(null)
+const id = useId()
 let settle = null
 
 function ask() {
@@ -19,9 +20,9 @@ defineExpose({ ask })
 </script>
 
 <template>
-  <dialog ref="dialog" @cancel.prevent="close(false)">
+  <dialog ref="dialog" :aria-labelledby="id" @cancel.prevent="close(false)">
     <form method="dialog" @submit.prevent="close(true)">
-      <h2>{{ title }}</h2>
+      <h2 :id="id">{{ title }}</h2>
       <div class="body"><slot /></div>
       <div class="buttons">
         <button type="button" class="plain" @click="close(false)">Cancel</button>

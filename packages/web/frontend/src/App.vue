@@ -1,7 +1,7 @@
 <script setup>
 import { onMounted, ref, watch } from 'vue'
 
-import { connection, loadSession, loadSite, logout, session, site } from './api.js'
+import { connection, loadSession, loadSite, logout, session, simulated, site } from './api.js'
 import Login from './views/Login.vue'
 
 const error = ref(null)
@@ -26,6 +26,7 @@ async function leave() {
 </script>
 
 <template>
+  <a class="skip" href="#main">Skip to content</a>
   <header class="top">
     <div class="inner">
       <RouterLink to="/" class="brand">
@@ -36,6 +37,8 @@ async function leave() {
         <RouterLink to="/devices">Devices</RouterLink>
         <RouterLink to="/log">Log</RouterLink>
         <RouterLink to="/raw">Raw data</RouterLink>
+        <RouterLink to="/help">Help</RouterLink>
+        <RouterLink v-if="simulated" to="/simulator">Simulator</RouterLink>
       </nav>
       <span v-if="session?.can_read" class="link" :class="{ down: !connection.live }" role="status">
         <span class="dot" aria-hidden="true"></span>{{ connection.live ? 'Live' : 'Reconnecting' }}
@@ -48,7 +51,7 @@ async function leave() {
       </button>
     </div>
   </header>
-  <main class="page">
+  <main id="main" class="page" tabindex="-1">
     <p v-if="error" class="error">Could not reach the dashboard service: {{ error }}</p>
     <Login v-else-if="session && (!session.can_read || (wantsLogin && !session.authenticated))" @done="wantsLogin = false" />
     <RouterView v-else-if="site" @login="wantsLogin = true" />

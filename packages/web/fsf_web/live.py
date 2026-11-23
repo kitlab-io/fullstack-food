@@ -29,6 +29,8 @@ def schema_of(parts: list[str]) -> str | None:
         return "zone_status" if len(parts) == 3 and parts[2] == "status" else None
     if parts[0] == "hub":
         return {"cmd": "hub_command", "reply": "hub_reply", "state": "hub_state"}.get(parts[1]) if len(parts) == 2 else None
+    if parts[0] == "sim":
+        return {"cmd": "sim_command", "state": "sim_state"}.get(parts[1]) if len(parts) == 2 else None
     if len(parts) == 2 and parts[1] == "status":
         return "node_status"
     if len(parts) == 3:
@@ -45,6 +47,7 @@ class Live:
         self.devices: dict[str, dict] = {}                      # device -> {"state": payload, "received": ISO}
         self.nodes: dict[str, dict] = {}                        # node -> {"online": bool, "since": ISO}
         self.hub: dict | None = None
+        self.sim: dict | None = None                            # set only when a simulator is on the bus
         self._listeners: list[tuple[queue.Queue, bool]] = []    # (inbox, wants raw MQTT too)
         self._raw: deque[dict] = deque(maxlen=RAW_BUFFER)
         self._seq = 0
@@ -60,7 +63,7 @@ class Live:
         parts = topic.split("/")[2:]
         received = self.now().isoformat() if self.now() else None
         event: dict | None = None
-        if parts[0] != "sim":                                   # the simulator's clock ticks are not traffic
+        if parts != ["sim", "clock"]:                           # the simulator's clock ticks are not traffic
             self._send(self._record(topic, parts, payload, received), raw=True)
         try:
             if parts[0] == "zone" and len(parts) == 3 and parts[2] == "status":
@@ -74,6 +77,11 @@ class Live:
                 if waiter:
                     waiter[1].append(reply)
                     waiter[0].set()
+            elif parts == ["sim", "state"]:
+                data = json.loads(payload)
+                with self._lock:
+                    self.sim = data
+                event = {"kind": "sim", "state": data}
             elif parts[0] == "hub" and parts[1:] == ["state"]:
                 data = json.loads(payload)
                 with self._lock:
@@ -150,7 +158,8 @@ class Live:
 
     def snapshot(self) -> dict:
         with self._lock:
-            return {"zones": dict(self.zones), "devices": dict(self.devices), "nodes": dict(self.nodes), "hub": self.hub}
+            return {"zones": dict(self.zones), "devices": dict(self.devices), "nodes": dict(self.nodes), "hub": self.hub,
+                    "sim": self.sim}
 
     def stream(self, keepalive: float = KEEPALIVE_S, limit: int | None = None, raw: bool = False) -> Iterator[str]:
         """Server-sent events: one `data:` line per change, a comment line when nothing happens.

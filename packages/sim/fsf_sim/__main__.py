@@ -40,6 +40,7 @@ def main() -> None:
     bus = MqttBus(args.mqtt_host, args.mqtt_port, client_id=f"fsf-sim-{site.id}")
     clock = VirtualClock(DEFAULT_START)
     sim = Sim(site, config, bus, clock)
+    sim.speed = args.speed
     sim.start()
     print(f"sim: {len(site.nodes)} node(s) for site {site.id} at {args.speed:g}x "
           f"against {args.mqtt_host}:{args.mqtt_port}", flush=True)
@@ -47,11 +48,13 @@ def main() -> None:
         while True:
             started = time.monotonic()
             bus.poll()
+            if sim.paused:                  # time stands still; commands (resume, faults) still arrive
+                time.sleep(0.05)
+                continue
             clock.advance(args.tick)
             sim.step(args.tick)
-            # Keep polling while we wait so hub commands land promptly.
-            deadline = started + args.tick / args.speed
-            while time.monotonic() < deadline:
+            # Keep polling while we wait so hub commands land promptly. The speed can change meanwhile.
+            while time.monotonic() < started + args.tick / sim.speed and not sim.paused:
                 bus.poll()
                 time.sleep(0.01)
     except KeyboardInterrupt:

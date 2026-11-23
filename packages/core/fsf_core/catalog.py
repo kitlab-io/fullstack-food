@@ -37,6 +37,20 @@ RETENTION_DEFAULTS = {
 }
 
 
+DETECT_DEFAULTS = {
+    "ack_within": "60s",            # an actuator that has not acknowledged a command by then is faulty
+    "dose_effect_within": "45m",    # a dose must have changed its quantity by then
+    "dose_min_change": 1.0,         # ... by at least this much (in the quantity's unit)
+    "ineffective_after": "2h",      # a heater or humidifier wanted on this long must have made progress
+    "progress_min": 0.5,            # ... of at least this much
+    "stuck_after": "12h",           # a sensor repeating one value this long is stuck
+    "leak_window": "6h",            # the reservoir must not fall ...
+    "leak_drop": 5.0,               # ... this many points in that time without any watering
+    "flap_window": "1h",            # a node that goes offline ...
+    "flap_count": 3,                # ... this often in that time is unstable
+}
+
+
 RESERVED_NODE_IDS = {"zone", "hub", "sim"}
 
 
@@ -218,6 +232,7 @@ class Site:
     theme: dict
     safety: dict
     retention: dict = field(default_factory=lambda: {k: seconds(v) for k, v in RETENTION_DEFAULTS.items()})
+    detection: dict = field(default_factory=lambda: {k: seconds(v) for k, v in DETECT_DEFAULTS.items()})
     devices: dict[str, Device] = field(default_factory=dict)
     zones: dict[str, Zone] = field(default_factory=dict)
     plantings: dict[str, Planting] = field(default_factory=dict)
@@ -268,7 +283,8 @@ def load_site(path: Path | str, catalog: Catalog) -> Site:
     }
     site = Site(id=raw["id"], raw=raw, timezone=raw.get("timezone", "UTC"),
                 theme=catalog.items["Theme"][theme_id], safety=safety,
-                retention={k: seconds(v) for k, v in {**RETENTION_DEFAULTS, **raw.get("retention", {})}.items()})
+                retention={k: seconds(v) for k, v in {**RETENTION_DEFAULTS, **raw.get("retention", {})}.items()},
+                detection={k: seconds(v) for k, v in {**DETECT_DEFAULTS, **raw.get("detection", {})}.items()})
 
     for node in raw["nodes"]:
         if node["id"] in RESERVED_NODE_IDS:

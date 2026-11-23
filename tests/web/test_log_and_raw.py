@@ -93,7 +93,7 @@ def test_mqtt_tail_buffers_traffic_and_flags_payloads_that_break_the_contract(se
 
     messages = client.get("/api/mqtt/recent", params={"limit": 2000}).json()["messages"]
     assert [m["n"] for m in messages] == sorted(m["n"] for m in messages)
-    assert not any("/sim/" in m["topic"] for m in messages)
+    assert not any(m["topic"].endswith("/sim/clock") for m in messages)        # clock ticks are not traffic
     by_topic = {m["topic"]: m for m in messages}
     assert by_topic[f"{base}/room-air/state"]["errors"] == ["'t' is a required property"]
     assert by_topic[f"{base}/pothos-pump/cmd"]["errors"] == ["'duration_s' is a required property"]

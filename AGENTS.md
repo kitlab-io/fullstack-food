@@ -8,11 +8,12 @@ small indoor growing setups (house plants, microgreens, mushrooms) on a local ne
 Mid-restructure. `docs/plan/restructure-plan.md` is the roadmap. Done so far: phase 0
 (hygiene), phase 1 (schemas and catalog), phase 2 (hub, simulator, scenario tests) and
 the status/LED engine from phase 3. Two follow-on plans are under way:
-`docs/plan/dashboard-plan.md` D1 to D4 (hub groundwork, dashboard, log and raw data, login
-and actions), and `docs/plan/installation-plan.md` I1 (assembly and test data per part, pin
-validation), the software halves of I2 (ESPHome config generation, node contract suite) and
-I3 (observe mode, commissioning records, bench, calibration and zone acceptance tools), and
-I4 (generated BOM, wiring diagrams, build guide, checklist and LED legend).
+`docs/plan/dashboard-plan.md` D1 to D5 (hub groundwork, dashboard, log and raw data, login
+and actions, simulator page), and `docs/plan/installation-plan.md` I1 (assembly and test data
+per part, pin validation), the software halves of I2 (ESPHome config generation, node
+contract suite) and I3 (observe mode, commissioning records, bench, calibration and zone
+acceptance tools), I4 (generated BOM, wiring diagrams, build guide, checklist and LED
+legend) and I5 (fault detection, troubleshooting guides, `fsf doctor`).
 Nothing has run on real hardware yet: no pin, wiring or power value in the catalog has been
 confirmed on a bench (`datasheet_checked: false`), and the generated firmware compiles with
 ESPHome but has never been flashed.
@@ -32,6 +33,10 @@ ESPHome but has never been flashed.
 | `packages/core/fsf_core/firmware` | ESPHome config generation from a site file; `fsf_node.h` is the C++ shared by every node |
 | `packages/core/fsf_core/builddocs.py` | Generated build documents: BOM, power budget, wiring SVG, build guide, checklist, LED legend |
 | `packages/core/fsf_core/nodetest.py` | Node contract suite, run against simulated or real nodes |
+| `packages/hub/fsf_hub/detect.py` | Fault detection: no effect, silent actuator, stuck or impossible sensor, leaking reservoir, unstable node |
+| `catalog/troubleshooting.yaml` | What to do about each status, and guides by symptom; every theme status must have an entry |
+| `packages/core/fsf_core/troubleshooting.py`, `doctor.py` | Generated troubleshooting pages; `fsf doctor` health check |
+| `docs/agents/` | Guides written for LLM agents, e.g. `diagnose-zone.md` |
 | `packages/hub/fsf_hub/commissioning.py` | Bench test, calibration and zone acceptance, driven over MQTT and recorded by the hub |
 | `packages/sim/fsf_sim` | Simulated nodes, zone physics, fault injection, `MockSystem` test harness |
 | `packages/web/fsf_web` | Dashboard service: FastAPI over the hub database and live MQTT state, shared login, actions sent as hub commands |
@@ -51,6 +56,7 @@ just test              # all tests, about three minutes
 just firmware sites/examples/houseplants --include-sim    # ESPHome configs into build/firmware/
 just node-test shelf-node --site <site> --actuate         # contract suite against a real broker
 just docs sites/examples/houseplants    # BOM, wiring, build guide, checklist, legend into build/docs/
+just doctor --site <site> --db hub.db   # health check of a running installation
 just web-build         # build the dashboard frontend (needs Node.js)
 just lint              # ruff, same as CI
 just mock mushrooms 600   # simulated site against a real Mosquitto broker in Docker, 600x speed;
@@ -88,6 +94,13 @@ without FastAPI, and the ESPHome validation test without the `esphome` command.
 - Commissioning goes bench (`fsf bench`), calibration (`fsf calibrate`), `fsf node test`,
   observe, `fsf zone test`, then `fsf zone mode <zone> active`. The tools record results with
   the hub's `commission` command; they never write the database or the site file.
+- Fault detection (`fsf_hub/detect.py`) adds statuses for things that are wrong although
+  readings may be in band. Thresholds are `detection:` in the site file. A reading that
+  cannot be real is not used for control. Every status, including these, needs an entry in
+  `catalog/troubleshooting.yaml`; validation fails without one.
+- The simulator publishes a retained `sim/state` and takes `sim/cmd` (speed, pause, fault
+  injection). The dashboard shows its Simulator page only when that state is on the bus.
+  Real nodes do not listen on `sim/cmd`.
 - A node may send anything: the hub ignores a payload that is not a JSON object and logs
   `bad_payload` once per topic.
 - The dashboard opens the hub's SQLite file read-only and subscribes to MQTT. Its one way
@@ -121,6 +134,8 @@ without FastAPI, and the ESPHome validation test without the `esphome` command.
 - **Add a recipe**: new file in `catalog/recipes/`. Keep `verified: false` and `sources: []`
   until the values are checked against a growing reference. Quote times (`"06:00"`); never use
   `on:` as a YAML key (YAML reads it as `true`).
+- **Add a status**: theme entry with `label` and `meaning`, a place in `priority`, and a
+  guide in `catalog/troubleshooting.yaml`. Add an icon for it in the frontend's `status.js`.
 - **Add a scenario test**: use the `mock` fixture, drive time with `system.run(...)`, inject
   faults through `system.sim`, assert on `system.status()`, `system.led()`, `system.events()`.
 - **Change control behaviour**: write the failing scenario test first; the suite is fast.
