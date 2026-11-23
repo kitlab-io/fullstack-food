@@ -126,6 +126,20 @@ th { color: var(--muted); font-weight: 600; }
     <p class="small muted">To switch site or start over with a fresh database, stop the stack and start it again:</p>
     <div class="cmd"><pre id="cmd-down"></pre><button type="button" data-copy="cmd-down">Copy</button></div>
     <details>
+      <summary class="small">On Windows with WSL: "permission denied while trying to connect to the docker API"</summary>
+      <div class="body">
+        <p class="small">Your WSL terminal was opened before your user's membership of the <code>docker</code> group took effect.
+          Pick the group up in the terminal you have, then run the start command again:</p>
+        <div class="cmd"><pre id="cmd-newgrp">newgrp docker</pre><button type="button" data-copy="cmd-newgrp">Copy</button></div>
+        <p class="small">Closing the terminal and opening a new WSL one does the same. If a new terminal still gets the error,
+          check that <code>id</code> lists <code>docker</code>. If it does not, add yourself with
+          <code>sudo usermod -aG docker $USER</code>. Then restart WSL from PowerShell:</p>
+        <div class="cmd"><pre id="cmd-wsl">wsl --shutdown</pre><button type="button" data-copy="cmd-wsl">Copy</button></div>
+        <p class="small muted">Starting from a folder under <code>/mnt/c/</code> works, but the image builds more slowly there than
+          from PowerShell, because the build reads the Windows drive through WSL. Choose <em>PowerShell</em> above to avoid that.</p>
+      </div>
+    </details>
+    <details>
       <summary class="small">No Docker? Run the same scenarios as automated tests instead</summary>
       <div class="body">
         <p class="small">Needs Python 3.12 or newer. This runs every scenario in this guide (and more) on a virtual clock in about two minutes.</p>
