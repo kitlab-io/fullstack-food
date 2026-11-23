@@ -1,5 +1,6 @@
 """The `fsf` command line (also `python -m fsf_core`).
 
+    fsf init <name> --from <example>        start a real site and generate its credentials
     fsf validate [--pins] [site ...]        check the catalog and site files
     fsf firmware build <site>               one ESPHome config per node
     fsf firmware flash <site> <node>        compile and upload with the ESPHome command line
@@ -12,6 +13,7 @@
     fsf commissioning --site <site>         what has been tested so far
     fsf doctor --site <site>                health check of a running installation
     fsf docs troubleshooting                troubleshooting pages by status, symptom and part
+    fsf docs compatibility                  which part and board has been tried with which runtime
 """
 
 from __future__ import annotations
@@ -63,12 +65,17 @@ def _firmware(args, root: Path, catalog: Catalog) -> int:
     out_dir = Path(args.out) if args.out else root / "build" / "firmware" / site.id
     try:
         if args.action == "build":
-            written, warnings = build(site, catalog, out_dir, str(args.site).replace("\\", "/"), include_sim=args.include_sim)
+            site_dir = Path(args.site) if Path(args.site).is_dir() else Path(args.site).parent
+            written, warnings = build(site, catalog, out_dir, str(args.site).replace("\\", "/"), include_sim=args.include_sim,
+                                      secrets_file=site_dir / "secrets.yaml")
             for path in written:
                 print(f"wrote {path}")
             for warning in warnings:
                 print(f"warning: {warning}")
-            print(f"next: copy {out_dir / 'secrets.example.yaml'} to secrets.yaml, fill it in, then `fsf firmware flash`")
+            if (out_dir / "secrets.yaml").exists():
+                print("next: check wifi and mqtt_host in the site's secrets.yaml, then `fsf firmware flash`")
+            else:
+                print(f"next: copy {out_dir / 'secrets.example.yaml'} to secrets.yaml, fill it in, then `fsf firmware flash`")
             return 0
         return flash(out_dir / f"{args.node}.yaml", args.device)
     except FirmwareError as err:
@@ -77,9 +84,34 @@ def _firmware(args, root: Path, catalog: Catalog) -> int:
         return 1
 
 
+def _init(args, root: Path, catalog: Catalog) -> int:
+    from .init import InitError, init
+
+    try:
+        written = init(args.name, Path(args.source), root, catalog, Path(args.dir) if args.dir else None)
+    except InitError as err:
+        print(f"init: {err}")
+        return 1
+    for path in written:
+        print(f"wrote {path}")
+    folder = written[0].parent
+    print(f"next: edit {folder / 'site.yaml'} (node runtimes, plantings), fill in wifi and mqtt_host in secrets.yaml,\n"
+          "      set the dashboard password hash in web.env, then start the stack with deploy/compose/sbc.yaml")
+    return 0
+
+
 def _docs(args, root: Path, catalog: Catalog) -> int:
     from .builddocs import build, power_budget
 
+    if args.action == "compatibility":
+        from .builddocs import compatibility_html, compatibility_markdown
+
+        out_dir = Path(args.out) if args.out else root / "build" / "docs"
+        out_dir.mkdir(parents=True, exist_ok=True)
+        for name, text in (("compatibility.md", compatibility_markdown(catalog)), ("compatibility.html", compatibility_html(catalog))):
+            (out_dir / name).write_text(text, encoding="utf-8", newline="\n")
+            print(f"wrote {out_dir / name}")
+        return 0
     if args.action == "troubleshooting":
         from .troubleshooting import build as build_troubleshooting
 
@@ -239,6 +271,11 @@ def _commissioning(args, root: Path, catalog: Catalog) -> int:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="fsf")
     sub = parser.add_subparsers(dest="command", required=True)
+    init = sub.add_parser("init", help="start a real site from an example and generate its credentials")
+    init.add_argument("name", help="id of the new site; becomes sites/local/<name>/")
+    init.add_argument("--from", dest="source", required=True, help="site directory or site.yaml to start from")
+    init.add_argument("--dir", help="write here instead of sites/local/<name>")
+
     validate = sub.add_parser("validate", help="validate the catalog and site files")
     validate.add_argument("sites", nargs="*", help="site directories or files (default: sites/examples/*)")
     validate.add_argument("--pins", action="store_true", help="also propose pins for devices that have none assigned")
@@ -260,6 +297,8 @@ def main(argv: list[str] | None = None) -> int:
     docs_build.add_argument("site", help="site directory or site.yaml")
     docs_build.add_argument("--out", help="output folder (default: build/docs/<site id>)")
 
+    docs_compat = docs.add_parser("compatibility", help="which part and board has been tried with which runtime")
+    docs_compat.add_argument("--out", help="output folder (default: build/docs)")
     docs_trouble = docs.add_parser("troubleshooting", help="troubleshooting pages by status, symptom and part")
     docs_trouble.add_argument("--out", help="output folder (default: build/docs/troubleshooting)")
 
@@ -309,7 +348,7 @@ def main(argv: list[str] | None = None) -> int:
         print("\n".join(f"  {p}" for p in err.problems))
         return 1
     try:
-        handler = {"validate": _validate, "firmware": _firmware, "node": _node_test, "docs": _docs, "doctor": _doctor}.get(args.command, _commissioning)
+        handler = {"validate": _validate, "firmware": _firmware, "node": _node_test, "docs": _docs, "doctor": _doctor, "init": _init}.get(args.command, _commissioning)
         return handler(args, root, catalog)
     except ConfigError as err:
         print(f"site {getattr(args, 'site', '')}: INVALID")

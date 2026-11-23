@@ -32,9 +32,13 @@ SECRETS = {
     "wifi_password": "its password",
     "ota_password": "password for over-the-air updates of the nodes",
     "mqtt_host": "address of the broker, as seen from the node",
-    "mqtt_username": "broker user for this site's nodes",
-    "mqtt_password": "its password",
 }
+
+
+def node_secrets(node_id: str) -> dict[str, str]:
+    """Every node has its own broker login, so the broker can restrict it to its own topics."""
+    return {f"{ident(node_id)}_mqtt_username": f"broker user of node {node_id} (fsf init makes it node-{node_id})",
+            f"{ident(node_id)}_mqtt_password": "its password"}
 REFUSED = "actuators accept on (with duration_s) and off"
 
 
@@ -151,8 +155,8 @@ def build_node(site: Site, catalog: Catalog, node: dict) -> NodeBuild:
         signals = {s["signal"]: s for s in dev.model.get("pins", [])}
         if driver is None or "template" not in driver:
             if dev.model["interface"]["bus"] == "mains_relay":
-                warnings.append(f"{where}: mains load, not in the firmware. Switch it through a certified smart plug; "
-                                "until a smart-plug driver exists the hub cannot control it")
+                warnings.append(f"{where}: mains load, not in the firmware. Put it on a smart power strip node "
+                                "(board tplink.kasa-hs300), which the fsf_kasa bridge controls")
             elif signals:
                 problems.append(f"{where}: model {dev.model['id']} has no ESPHome template")
             continue
@@ -267,7 +271,8 @@ def build_node(site: Site, catalog: Catalog, node: dict) -> NodeBuild:
     if "framework" in target:
         platform["framework"] = {"type": target["framework"]}
     mqtt: dict = {
-        "broker": Secret("mqtt_host"), "username": Secret("mqtt_username"), "password": Secret("mqtt_password"),
+        "broker": Secret("mqtt_host"), "username": Secret(f"{ident(node_id)}_mqtt_username"),
+        "password": Secret(f"{ident(node_id)}_mqtt_password"),
         "client_id": f"fsf-{sid}-{node_id}", "discovery": False, "log_topic": None,
         "topic_prefix": f"{topics.ROOT}/{sid}/{node_id}/esphome",
         "birth_message": {"topic": status, "payload": "online", "retain": True},
@@ -302,8 +307,13 @@ def buildable(site: Site, catalog: Catalog, include_sim: bool = False) -> list[d
     return out
 
 
-def build(site: Site, catalog: Catalog, out_dir: Path, source: str, include_sim: bool = False) -> tuple[list[Path], list[str]]:
-    """Write <node>.yaml for every buildable node, the shared header and secrets.example.yaml."""
+def build(site: Site, catalog: Catalog, out_dir: Path, source: str, include_sim: bool = False,
+          secrets_file: Path | None = None) -> tuple[list[Path], list[str]]:
+    """Write <node>.yaml for every buildable node, the shared header and secrets.example.yaml.
+
+    secrets_file: the site's own secrets.yaml (from `fsf init`); copied next to the configs,
+    which is where ESPHome looks for it. The output folder is gitignored.
+    """
     nodes = buildable(site, catalog, include_sim)
     if not nodes:
         raise FirmwareError([f"site {site.id} has no node with runtime esphome "
@@ -323,9 +333,14 @@ def build(site: Site, catalog: Catalog, out_dir: Path, source: str, include_sim:
         path.write_text(item.render(source), encoding="utf-8", newline="\n")
         written.append(path)
     shutil.copyfile(Path(__file__).parent / HEADER, out_dir / HEADER)
-    example = "# Copy to secrets.yaml in this folder and fill in. Never commit secrets.yaml.\n" + "".join(
-        f'{key}: ""    # {meaning}\n' for key, meaning in SECRETS.items())
+    keys = dict(SECRETS)
+    for item in builds:
+        keys.update(node_secrets(item.node))
+    example = ("# Copy to secrets.yaml in this folder and fill in, or let `fsf init` generate it. Never commit secrets.yaml.\n"
+               + "".join(f'{key}: ""    # {meaning}\n' for key, meaning in keys.items()))
     (out_dir / "secrets.example.yaml").write_text(example, encoding="utf-8", newline="\n")
+    if secrets_file is not None and secrets_file.exists():
+        shutil.copyfile(secrets_file, out_dir / "secrets.yaml")
     return written, [w for item in builds for w in item.warnings]
 
 

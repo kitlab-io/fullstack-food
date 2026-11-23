@@ -9,7 +9,7 @@ import yaml
 
 from fsf_core import find_repo_root, load_site
 from fsf_core.__main__ import main
-from fsf_core.firmware import SECRETS, FirmwareError, build, build_node
+from fsf_core.firmware import SECRETS, FirmwareError, build, build_node, node_secrets
 
 
 class _Loader(yaml.SafeLoader):
@@ -76,11 +76,10 @@ def test_every_actuator_gets_a_lease_that_the_node_ends_itself(tmp_path, catalog
                 assert "fsf_is_on(x)" in _text(handler) or "render" in _text(handler)
 
 
-def test_mains_loads_are_left_out_with_a_warning(tmp_path, catalog):
+def test_the_power_strip_is_not_firmware_and_pwm_parts_get_level_outputs(tmp_path, catalog):
     site = load_site(find_repo_root() / "sites/examples/mushrooms", catalog)
-    _, warnings = build(site, catalog, tmp_path, "site.yaml", include_sim=True)
-    assert len(warnings) == 2 and all("mains load, not in the firmware" in w for w in warnings)
-    assert warnings[0].startswith("device inc-heater:") and warnings[1].startswith("device fr-humidifier:")
+    written, warnings = build(site, catalog, tmp_path, "site.yaml", include_sim=True)
+    assert sorted(p.stem for p in written) == ["fruiting-node", "incubation-node"] and not warnings     # no config for the strip
     configs = _build(tmp_path, catalog, "mushrooms")
     assert "script" not in configs["incubation-node"]
     fan = next(s for s in configs["fruiting-node"]["script"] if s["id"] == "fr_fan_lease")
@@ -89,13 +88,23 @@ def test_mains_loads_are_left_out_with_a_warning(tmp_path, catalog):
     assert [step["output.turn_off"] for step in light["then"] if "output.turn_off" in step] == ["fr_light_cold", "fr_light_warm"]
 
 
+def test_a_mains_load_on_a_microcontroller_node_is_left_out_with_a_warning(catalog):
+    site = copy.deepcopy(load_site(find_repo_root() / "sites/examples/mushrooms", catalog))
+    site.devices["inc-heater"].node = "incubation-node"         # wired to the board instead of the strip
+    build_result = build_node(site, catalog, site.raw["nodes"][0])
+    assert build_result.warnings == ["device inc-heater: mains load, not in the firmware. Put it on a smart power strip node "
+                                     "(board tplink.kasa-hs300), which the fsf_kasa bridge controls"]
+
+
 def test_no_secret_is_written(tmp_path, catalog):
     _build(tmp_path, catalog, "microgreens")
     text = (tmp_path / "tray-node.yaml").read_text(encoding="utf-8")
-    for key in SECRETS:
+    keys = {**SECRETS, **node_secrets("tray-node")}
+    for key in keys:
         assert f"!secret '{key}'" in text or f"!secret {key}" in text
+    assert "tray_node_mqtt_password" in keys             # each node logs in to the broker as itself
     example = yaml.safe_load((tmp_path / "secrets.example.yaml").read_text(encoding="utf-8"))
-    assert example == dict.fromkeys(SECRETS, "")
+    assert example == dict.fromkeys(keys, "")
     assert not (tmp_path / "secrets.yaml").exists()
     assert (tmp_path / "fsf_node.h").read_text(encoding="utf-8").count("fsf_draw") == 1
 
@@ -128,7 +137,8 @@ def test_generated_configs_pass_esphome_validation(tmp_path, catalog):
     for name in ("houseplants", "microgreens", "mushrooms"):
         out = tmp_path / name
         configs = _build(out, catalog, name)
-        (out / "secrets.yaml").write_text("".join(f'{k}: "example-{k}"\n' for k in SECRETS), encoding="utf-8")
+        keys = list(SECRETS) + [k for node in configs for k in node_secrets(node)]
+        (out / "secrets.yaml").write_text("".join(f'{k}: "example-{k}"\n' for k in keys), encoding="utf-8")
         for node in configs:
             result = subprocess.run(["esphome", "config", str(out / f"{node}.yaml")], capture_output=True, text=True,
                                     encoding="utf-8", errors="replace")

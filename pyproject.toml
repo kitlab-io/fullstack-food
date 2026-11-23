@@ -9,6 +9,7 @@ dependencies = ["pyyaml>=6", "jsonschema>=4.18", "paho-mqtt>=2"]
 [project.optional-dependencies]
 web = ["fastapi>=0.115", "uvicorn>=0.30"]      # the dashboard service
 firmware = ["esphome>=2025.2"]                  # only needed to flash nodes
+kasa = ["python-kasa>=0.7"]                     # only needed for the smart power strip bridge
 
 [project.scripts]
 fsf = "fsf_core.__main__:main"
@@ -21,10 +22,10 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build]
-dev-mode-dirs = ["packages/core", "packages/hub", "packages/sim", "packages/web"]
+dev-mode-dirs = ["packages/core", "packages/hub", "packages/sim", "packages/web", "packages/kasa"]
 
 [tool.hatch.build.targets.wheel]
-packages = ["packages/core/fsf_core", "packages/hub/fsf_hub", "packages/sim/fsf_sim", "packages/web/fsf_web"]
+packages = ["packages/core/fsf_core", "packages/hub/fsf_hub", "packages/sim/fsf_sim", "packages/web/fsf_web", "packages/kasa/fsf_kasa"]
 
 [tool.ruff]
 target-version = "py312"
@@ -41,4 +42,4 @@ select = ["E9", "F63", "F7", "F82"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-pythonpath = ["packages/core", "packages/hub", "packages/sim", "packages/web"]
+pythonpath = ["packages/core", "packages/hub", "packages/sim", "packages/web", "packages/kasa"]

@@ -314,6 +314,24 @@ def load_site(path: Path | str, catalog: Catalog) -> Site:
             if "indicator.led_strip" in roles and "led_count" not in dev:
                 problems.append(f"{where}: device {did}: LED strips need led_count")
             site.devices[did] = Device(id=did, node=node["id"], model=model, roles=roles, raw=dev)
+        if node["board"] in boards and boards[node["board"]]["class"] == "smart_plug":
+            strip, taken = boards[node["board"]], {}
+            for dev in node["devices"]:
+                outlet = dev.get("outlet")
+                if outlet is None:
+                    problems.append(f"{where}: device {dev['id']}: devices on a smart power strip need an outlet number")
+                elif outlet >= strip.get("outlets", 1):
+                    problems.append(f"{where}: device {dev['id']}: outlet {outlet} does not exist on {strip['id']} (0..{strip.get('outlets', 1) - 1})")
+                elif outlet in taken:
+                    problems.append(f"{where}: device {dev['id']}: outlet {outlet} is already used by {taken[outlet]}")
+                else:
+                    taken[outlet] = dev["id"]
+        else:
+            for dev in node["devices"]:
+                model = models.get(dev["model"], {})
+                if model.get("interface", {}).get("bus") == "mains_relay" and node["runtime"] != "sim":
+                    site.warnings.append(f"device {dev['id']}: a mains load on node {node['id']} has no certified switch; "
+                                         "put it on a smart power strip node")
         if node["board"] in boards:
             report = check_node(node["id"], boards[node["board"]],
                                 [d for d in site.devices.values() if d.node == node["id"]])

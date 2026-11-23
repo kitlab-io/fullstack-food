@@ -185,7 +185,9 @@ def wiring_svg(site: Site, catalog: Catalog, node_id: str) -> str:
                 lines.append(f'<path d="M{x1} {y1} C{mid} {y1} {mid} {line_y} {dev_x} {line_y}" stroke="{color}"/>')
             line_y += 22
         if mains:
-            parts.append(f'<text class="warn" x="{dev_x + 12}" y="{line_y + 4}">Mains: through a certified smart plug. No board wiring.</text>')
+            where = (f"Mains: outlet {dev.raw['outlet']} of this strip." if "outlet" in dev.raw
+                     else "Mains: through a certified smart plug. No board wiring.")
+            parts.append(f'<text class="warn" x="{dev_x + 12}" y="{line_y + 4}">{where}</text>')
             line_y += 20
         if support:
             names = ", ".join(f"{s.get('qty', 1)}× {s['part']}" for s in support)
@@ -291,10 +293,20 @@ def build_guide_html(site: Site, catalog: Catalog) -> str:
         devices = _node_devices(site, node["id"])
         body.append(f"<h3>Node {escape(node['id'])}</h3>{wiring_svg(site, catalog, node['id'])}")
         step += 1
-        body.append(f'<div class="step"><strong>Step {step}. Flash the bare board.</strong> Build the firmware and flash it over USB '
-                    "before anything is connected to the board."
-                    f'<div class="test">Test: <code>fsf firmware build &lt;site&gt;</code>, <code>fsf firmware flash &lt;site&gt; {escape(node["id"])}</code>, '
-                    "then the node appears as online on the dashboard's devices page.</div></div>")
+        strip = catalog.get("Board", node["board"])["class"] == "smart_plug"
+        if strip:
+            body.append(f'<div class="step"><strong>Step {step}. Set up the power strip.</strong> Join it to the network with its own app, give it a '
+                        "fixed address on your router, and start the bridge on the hub host with nothing plugged in. "
+                        '<p class="warn">The strip cannot end an on-command by itself: the bridge switches each outlet off when its lease '
+                        "runs out. If the bridge stops while an outlet is on, the outlet stays on until the bridge is back. Run the bridge under "
+                        "a supervisor that restarts it, and keep max_on short for anything that heats.</p>"
+                        f'<div class="test">Test: <code>FSF_KASA_HOST=&lt;address&gt; python -m fsf_kasa --site &lt;site&gt; --node {escape(node["id"])}</code>, '
+                        "then the node appears as online on the dashboard's devices page.</div></div>")
+        else:
+            body.append(f'<div class="step"><strong>Step {step}. Flash the bare board.</strong> Build the firmware and flash it over USB '
+                        "before anything is connected to the board."
+                        f'<div class="test">Test: <code>fsf firmware build &lt;site&gt;</code>, <code>fsf firmware flash &lt;site&gt; {escape(node["id"])}</code>, '
+                        "then the node appears as online on the dashboard's devices page.</div></div>")
         # A part others plug into comes first, then sensors, then actuators, so every actuator
         # is first tried with something watching.
         for dev in sorted(devices, key=lambda d: ("provides" not in d.model, d.cls == "actuator", d.cls == "indicator")):
@@ -303,7 +315,8 @@ def build_guide_html(site: Site, catalog: Catalog) -> str:
             pins = dev.raw.get("pins", {})
             signals = ", ".join(f"{s['signal']} to {pins.get(s['signal'], 'NOT ASSIGNED')}" for s in model.get("pins", []))
             connect = (f"Connect {signals}." if signals else
-                       "Plug it into its smart plug. It has no wiring to the board." if model["interface"]["bus"] == "mains_relay"
+                       f"Plug it into outlet {dev.raw['outlet'] + 1} of the strip (outlet {dev.raw['outlet']} in the site file)." if "outlet" in dev.raw
+                       else "Plug it into its smart plug. It has no wiring to the board." if model["interface"]["bus"] == "mains_relay"
                        else "No signal wiring.")
             rail = RAILS.get(model.get("power", {}).get("rail"), "its supply")
             support = "".join(f"<li>{s.get('qty', 1)}× {escape(s['part'])}: {escape(s['purpose'])}"
@@ -386,6 +399,77 @@ def legend_html(site: Site, catalog: Catalog) -> str:
     night = theme["brightness"]["night_hours"]
     body.append(f"<p class='small muted'>Lights dim between {night[0]}:00 and {night[1]}:00. Colours on paper are approximate.</p>")
     return _page(f"Status lights: {site.id}", "\n".join(body))
+
+
+RUNTIMES = ("esphome", "kasa", "linux", "circuitpython", "sim")
+STATUS_WORDS = {"verified": "verified", "bench": "run by hand", "untested": "untested"}
+
+
+def compatibility(catalog: Catalog) -> dict:
+    """What has actually been tried: per part and runtime, the driver's status and where it was verified."""
+    parts = []
+    for model in sorted(catalog.items["Model"].values(), key=lambda m: m.get("name", m["id"])):
+        drivers = {d["runtime"]: d for d in model["drivers"]}
+        parts.append({"id": model["id"], "name": model.get("name", model["id"]), "implements": model["implements"],
+                      "datasheet_checked": model.get("datasheet_checked"),
+                      "drivers": {rt: {"status": drivers[rt]["status"], "tested_on": drivers[rt].get("tested_on", [])}
+                                  for rt in RUNTIMES if rt in drivers}})
+    boards = [{"id": b["id"], "name": b.get("name", b["id"]), "class": b["class"], "runtimes": b.get("runtimes", []),
+               "os": b.get("os", []), "pin_map": "pins" in b, "datasheet_checked": b.get("datasheet_checked")}
+              for b in sorted(catalog.items["Board"].values(), key=lambda b: b["id"])]
+    real = [(p["id"], rt) for p in parts for rt, d in p["drivers"].items() if rt != "sim" and d["status"] == "verified"]
+    return {"parts": parts, "boards": boards, "verified_on_hardware": real}
+
+
+def compatibility_markdown(catalog: Catalog) -> str:
+    data = compatibility(catalog)
+    lines = ["# Compatibility", "", "Generated from catalog/models and catalog/boards. Do not edit.", "",
+             "`verified`: passes the test suite on the listed targets. `run by hand`: someone ran it once on a bench. "
+             "`untested`: expected to work, never run. The simulated driver being verified says nothing about hardware.", ""]
+    if not data["verified_on_hardware"]:
+        lines += ["**No part is verified on real hardware yet.**", ""]
+    lines += ["## Parts", "", "| Part | " + " | ".join(RUNTIMES) + " | Wiring data checked |", "|---|" + "---|" * (len(RUNTIMES) + 1)]
+    for part in data["parts"]:
+        cells = []
+        for rt in RUNTIMES:
+            driver = part["drivers"].get(rt)
+            cells.append("–" if driver is None else STATUS_WORDS[driver["status"]]
+                         + (f" ({', '.join(driver['tested_on'])})" if driver["tested_on"] else ""))
+        checked = {True: "yes", False: "no", None: "no data"}[part["datasheet_checked"]]
+        lines.append(f"| {part['name']} | " + " | ".join(cells) + f" | {checked} |")
+    lines += ["", "## Boards", "", "| Board | Kind | Runtimes | Operating systems | Pin map |", "|---|---|---|---|---|"]
+    for board in data["boards"]:
+        pin_map = "–" if board["class"] != "mcu" else ("yes, unconfirmed" if board["pin_map"] and board["datasheet_checked"] is False
+                                                       else "yes" if board["pin_map"] else "no")
+        lines.append(f"| {board['name']} | {board['class'].replace('_', ' ')} | {', '.join(board['runtimes']) or '–'} | "
+                     f"{', '.join(board['os']) or '–'} | {pin_map} |")
+    return "\n".join(lines) + "\n"
+
+
+def compatibility_html(catalog: Catalog) -> str:
+    """The same tables as a page."""
+    blocks, table, rows = [], False, []
+    for line in compatibility_markdown(catalog).splitlines():
+        if line.startswith("|"):
+            if set(line) <= set("|- "):
+                continue
+            rows.append([escape(c.strip()) for c in line.strip("|").split("|")])
+            table = True
+            continue
+        if table:
+            blocks.append(_table([c for c in rows[0]], rows[1:]))
+            table, rows = False, []
+        if line.startswith("# "):
+            blocks.append(f"<h1>{escape(line[2:])}</h1>")
+        elif line.startswith("## "):
+            blocks.append(f"<h2>{escape(line[3:])}</h2>")
+        elif line.startswith("**"):
+            blocks.append(f'<p class="warn">{escape(line.strip("*"))}</p>')
+        elif line:
+            blocks.append(f"<p>{escape(line).replace('`', '')}</p>")
+    if rows:
+        blocks.append(_table(rows[0], rows[1:]))
+    return _page("Compatibility", "\n".join(blocks))
 
 
 def build(site: Site, catalog: Catalog, out_dir: Path) -> list[Path]:

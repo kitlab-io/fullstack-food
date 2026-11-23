@@ -1,0 +1,43 @@
+# A real site on a single-board computer (or any Linux host), on top of base.yaml:
+#
+#   fsf init my-site --from sites/examples/houseplants      # once: site file and credentials
+#   FSF_SITE=my-site docker compose -f deploy/compose/base.yaml -f deploy/compose/sbc.yaml up -d --build
+#
+# The broker requires a login from every client and is reachable from the local network,
+# because the nodes have to reach it. The dashboard is reachable from the local network too
+# and needs FSF_WEB_PASSWORD_HASH in sites/local/<site>/web.env. Never forward either port
+# to the internet.
+#
+# Not yet run on a Raspberry Pi or an Orange Pi.
+services:
+  broker:
+    volumes:
+      - ./mosquitto-auth.conf:/mosquitto/config/mosquitto.conf:ro
+      - ../../sites/local/${FSF_SITE:?set FSF_SITE to the folder name under sites/local}/broker/passwd:/mosquitto/config/passwd:ro
+      - ../../sites/local/${FSF_SITE}/broker/acl:/mosquitto/config/acl:ro
+      - broker-data:/mosquitto/data
+    ports: !override
+      - "1883:1883"
+    healthcheck:
+      test: ["CMD-SHELL", "nc -z localhost 1883"]
+
+  hub:
+    command: ["python", "-m", "fsf_hub", "--site", "sites/local/${FSF_SITE}", "--mqtt-host", "broker", "--db", "/data/hub.db"]
+    env_file: ../../sites/local/${FSF_SITE}/hub.env
+    volumes:
+      - hub-data:/data
+      - ../../sites/local/${FSF_SITE}/site.yaml:/app/sites/local/${FSF_SITE}/site.yaml:ro
+
+  web:
+    command: ["python", "-m", "fsf_web", "--site", "sites/local/${FSF_SITE}", "--mqtt-host", "broker", "--db", "/data/hub.db",
+              "--host", "0.0.0.0"]
+    env_file: ../../sites/local/${FSF_SITE}/web.env
+    environment: !reset null
+    volumes:
+      - hub-data:/data
+      - ../../sites/local/${FSF_SITE}/site.yaml:/app/sites/local/${FSF_SITE}/site.yaml:ro
+    ports: !override
+      - "8080:8080"
+
+volumes:
+  broker-data:

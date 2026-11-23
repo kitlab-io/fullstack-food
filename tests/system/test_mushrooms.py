@@ -101,16 +101,16 @@ def test_offline_node_is_reported_and_its_actuators_fall_safe(mock):
     system = mock("mushrooms")
     assert system.run(hours=3, until=lambda: system.is_on("inc-heater"))
 
-    system.sim.node_offline("incubation-node")
+    system.sim.node_offline("plug-strip")           # the heat mat is on the smart power strip
     system.run(minutes=1)
     assert system.status("incubation-chamber") == "offline"
     led = system.led("incubation-chamber")          # the strip is on the other node, so it can still show it
     assert (led["status"], led["effect"]) == ("offline", "blink_slow")
     system.run(minutes=4)
     assert not system.is_on("inc-heater")           # lease expired on the node; no command was needed
-    assert system.status("fruiting-chamber") == "idle"
+    assert system.status("fruiting-chamber") == "offline"   # the strip also carries that chamber's humidifier
 
-    system.sim.node_offline("incubation-node", False)
+    system.sim.node_offline("plug-strip", False)
     system.run(hours=2)
     assert system.status("incubation-chamber") == "ok"
     assert system.sim.zones["incubation-chamber"].air_temperature >= 21

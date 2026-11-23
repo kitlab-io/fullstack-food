@@ -1,0 +1,19 @@
+# Home Assistant add-on: the hub and the dashboard, using the Mosquitto broker add-on.
+# SKELETON: never built or installed. See README.md in this folder.
+name: Fullstack Food
+version: "0.0.0"
+slug: fullstack_food
+description: Monitoring and climate control for house plants, microgreens and mushrooms
+url: https://github.com/kitlab-io/fullstack-food
+arch: [aarch64, amd64]
+init: false
+services:
+  - mqtt:need
+ingress: true
+ingress_port: 8080
+map:
+  - addon_config:rw      # /config: put <site>/site.yaml here
+options:
+  site: my-site
+schema:
+  site: str

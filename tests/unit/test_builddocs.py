@@ -45,7 +45,8 @@ def test_power_budget_adds_up_per_rail_and_warns(sites, catalog):
     fruiting = next(e for e in power_budget(sites["mushrooms"], catalog) if e["node"] == "fruiting-node")
     assert fruiting["rails"]["12v"]["unknown"] == ["fr-heater", "fr-light"]
     assert "current of fr-heater, fr-light is not in the catalog" in fruiting["warnings"][0]
-    assert fruiting["rails"]["mains"]["unknown"] == ["fr-humidifier"]
+    strip = next(e for e in power_budget(sites["mushrooms"], catalog) if e["node"] == "plug-strip")
+    assert strip["rails"]["mains"]["unknown"] == ["inc-heater", "fr-humidifier"] and not strip["warnings"]
     supply = next(r for r in bom(sites["mushrooms"], catalog) if r["item"].startswith("12 V power supply") and r["used_by"] == "fruiting-node")
     assert "not counted: fr-heater, fr-light" in supply["note"]
 
@@ -66,8 +67,8 @@ def test_wiring_diagram_is_valid_svg_showing_every_assigned_signal(sites, catalo
     on_board = sum(1 for d in site.devices.values() for p in d.raw.get("pins", {}).values() if "/" not in p)
     assert len(paths) == on_board
 
-    mushrooms = wiring_svg(sites["mushrooms"], catalog, "incubation-node")
-    assert "Mains: through a certified smart plug. No board wiring." in mushrooms
+    mushrooms = wiring_svg(sites["mushrooms"], catalog, "plug-strip")
+    assert "Mains: outlet 0 of this strip." in mushrooms and "no pins in use" in mushrooms
     ET.fromstring(mushrooms)
 
 
@@ -89,7 +90,9 @@ def test_build_guide_orders_steps_and_ends_each_in_a_test(sites, catalog):
 
     mushrooms = build_guide_html(sites["mushrooms"], catalog)
     assert "Mains loads are switched only through a certified smart plug" in mushrooms
-    assert "Plug it into its smart plug. It has no wiring to the board." in mushrooms
+    assert "Plug it into outlet 1 of the strip (outlet 0 in the site file)." in mushrooms
+    assert "Set up the power strip" in mushrooms and "the outlet stays on until the bridge is back" in mushrooms
+    assert "fsf firmware flash &lt;site&gt; plug-strip" not in mushrooms    # a strip is not flashed
     assert "fsf calibrate fr-climate" not in mushrooms                      # CO2 calibration is done by hand
 
 
@@ -97,8 +100,8 @@ def test_checklist_has_a_box_for_every_stage(sites, catalog):
     html = checklist_html(sites["mushrooms"], catalog)
     site = sites["mushrooms"]
     assert html.count("fsf bench ") == len(site.devices)
-    assert html.count("fsf node test ") == 2 and html.count("fsf zone test ") == 2
-    assert html.count('<span class="box">') == len(site.devices) + 2 + 3 * 2 + 1      # bench, node tests, zone stages, strip
+    assert html.count("fsf node test ") == 3 and html.count("fsf zone test ") == 2
+    assert html.count('<span class="box">') == len(site.devices) + 3 + 3 * 2 + 1      # bench, node tests, zone stages, strip
 
 
 def test_legend_card_matches_the_theme_and_the_strip_layout(sites, catalog):
@@ -115,7 +118,8 @@ def test_command_writes_all_documents_and_reports_power_warnings(tmp_path, capsy
     assert main(["docs", "build", str(find_repo_root() / "sites/examples/mushrooms"), "--out", str(tmp_path)]) == 0
     out = capsys.readouterr().out
     assert sorted(p.name for p in tmp_path.iterdir()) == ["bom.csv", "build-guide.html", "checklist.html", "legend.html",
-                                                          "wiring-fruiting-node.svg", "wiring-incubation-node.svg"]
+                                                          "wiring-fruiting-node.svg", "wiring-incubation-node.svg",
+                                                          "wiring-plug-strip.svg"]
     assert "warning: node fruiting-node: 12 V rail: current of fr-heater, fr-light is not in the catalog" in out
 
 

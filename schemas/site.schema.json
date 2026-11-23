@@ -206,6 +206,11 @@
                 "led_count": {
                   "type": "integer",
                   "minimum": 1
+                },
+                "outlet": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "description": "On a smart power strip: which outlet, counted from 0"
                 }
               },
               "required": [

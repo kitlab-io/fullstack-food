@@ -16,7 +16,7 @@ def _contract(system, node: str) -> NodeContract:
 
 
 @pytest.mark.parametrize("site, node", [("houseplants", "shelf-node"), ("microgreens", "tray-node"),
-                                        ("mushrooms", "incubation-node"), ("mushrooms", "fruiting-node")])
+                                        ("mushrooms", "plug-strip"), ("mushrooms", "fruiting-node")])
 def test_simulated_nodes_keep_the_contract(mock, site, node):
     system = mock(site)
     contract = _contract(system, node)

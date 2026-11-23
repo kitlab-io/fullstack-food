@@ -135,7 +135,8 @@ def test_devices_page_shows_nodes_parts_and_test_status(served):
     assert nodes["incubation-node"]["online"] is True and nodes["fruiting-node"]["online"] is False
     assert nodes["fruiting-node"]["since"] == system.clock.now().isoformat()
 
-    devices = {d["id"]: d for d in nodes["incubation-node"]["devices"]}
+    devices = {d["id"]: d for n in ("incubation-node", "plug-strip") for d in nodes[n]["devices"]}
+    assert nodes["plug-strip"]["board"] == "tplink.kasa-hs300"
     air = devices["inc-air"]
     assert air["model_name"] == "Aosong AHT20" and air["driver_status"] == "verified"      # the simulated driver
     assert air["pins"] == {"sda": "GPIO5", "scl": "GPIO6"} and air["datasheet_checked"] is False

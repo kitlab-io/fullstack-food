@@ -63,6 +63,7 @@ http://localhost:8080.
 Nothing below has been run on a board yet.
 
 ```bash
+fsf init my-site --from sites/examples/houseplants   # sites/local/my-site: site file, node and broker logins, ACLs
 fsf validate --pins sites/local/my-site          # check pin assignments, propose pins for blanks
 fsf docs build sites/local/my-site               # BOM, wiring diagrams, build guide, checklist, LED legend
 fsf firmware build sites/local/my-site           # one ESPHome config per node in build/firmware/<site>/
@@ -78,6 +79,17 @@ would do and switches nothing.
 When something is wrong: `fsf doctor --site <site> --db <hub db>` prints a pass/fail list with
 the fix for each failure, `fsf docs troubleshooting` writes the guides by status, symptom and
 part, and the dashboard's Help page shows the same guides next to the live status.
+
+To run the hub for a real site, with a broker that requires a login from every client:
+
+```bash
+FSF_SITE=my-site docker compose -f deploy/compose/base.yaml -f deploy/compose/sbc.yaml up -d --build
+```
+
+`deploy/os/` has a provisioning script for Raspberry Pi OS and Armbian (never run yet) and
+says what is known about each target. Mains loads (heat mat, humidifier) go on a smart power
+strip driven by `python -m fsf_kasa`; `fsf docs compatibility` lists what has been tried on
+what. So far nothing is verified on real hardware.
 
 `fsf node test` runs the same contract checks the simulated nodes pass: payloads match
 `schemas/mqtt/`, an on-command ends by itself, `off` is honoured. With `--actuate` it switches

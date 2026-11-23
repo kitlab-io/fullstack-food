@@ -1,8 +1,8 @@
 # Installation, assembly, testing and troubleshooting plan
 
 Status (2026-11-22): the recommended options in section 9 are accepted. Phase I1 is built,
-and so are the software halves of I2 and I3, the generators of I4, and I5; the hardware
-halves and I6 are not started. Today the system runs only against simulated nodes; this plan is
+and so are the software halves of I2, I3 and I6, the generators of I4, and I5. No phase's
+hardware half has started: nothing has run on a board. Today the system runs only against simulated nodes; this plan is
 the path from that to a working physical installation that someone else can replicate.
 
 How I1 stands:
@@ -36,9 +36,8 @@ How I2 stands:
   schemas, and with `--actuate` lease expiry, off, refusal of on without a duration and of
   unknown commands, LED render; `--last-will` asks for the plug to be pulled. The simulated
   nodes of all three sites pass it in the test suite.
-- Mains loads (heat mat, humidifier) are left out of the firmware with a warning, as
-  decision 2 says. Until a smart-plug driver exists the hub cannot switch them on real
-  hardware, so the mushroom build cannot run for real yet.
+- Mains loads (heat mat, humidifier) are not in the firmware, as decision 2 says. They sit
+  on a smart power strip node (see I6).
 - Calibration values in the example sites are examples, not measurements.
 - Not done: the CircuitPython reference client, a browser flasher, release binaries.
 
@@ -108,6 +107,36 @@ How I5 stands:
 - `docs/agents/diagnose-zone.md` is a guide for an LLM agent. The other agent documents and
   skills of section 7 are not written.
 - Thresholds and the guides' hardware advice are untested on hardware.
+
+How I6 stands:
+
+- Smart power strip: board `tplink.kasa-hs300`, devices with an `outlet`, and the
+  `fsf_kasa` bridge, one process per strip. It passes the node contract suite against an
+  in-memory strip. The lease is weaker than on a microcontroller, as decision 2 foresaw:
+  the bridge switches an outlet off when its lease ends, so a hub failure is covered but a
+  bridge failure is not. The bridge switches everything off when it starts and stops,
+  switches off an outlet that is on without a lease, and retries until the strip answers.
+  The build guide carries that warning. The python-kasa backend has never talked to a real
+  strip.
+- The mushroom example now has a `plug-strip` node for the heat mat and the humidifier, so
+  all three example builds are complete in software. Microgreens has no mains load.
+- `fsf init <name> --from <example>` creates `sites/local/<name>/` with the site file, one
+  broker login per node, logins for the hub, dashboard and command line, a Mosquitto
+  password file and an ACL. A real Mosquitto accepted the generated logins, refused
+  anonymous and wrong-password clients, and enforced the ACL (checked in Docker).
+  Running it again keeps existing passwords and adds new nodes.
+- `deploy/compose/sbc.yaml` starts broker, hub and dashboard for a real site with those
+  logins; checked on a development machine with Docker Desktop, not on a Pi.
+- `deploy/os/provision.sh` (Raspberry Pi OS and Armbian, one script) and the Home Assistant
+  add-on in `deploy/haos/` are written but have never been run; the add-on is a skeleton
+  with known gaps listed in its README.
+- `fsf docs compatibility` writes the matrix of parts, boards and runtimes. It states that
+  no part is verified on real hardware.
+- Differences from section 2: no `fsf update`, no backup command, no storage on USB or NAS,
+  the bridge is not in the compose files, traffic is not encrypted, and the provisioning
+  script does not enable I2C or 1-Wire (sensors on the hub are deferred, decision 3).
+- The done-when (all three reference builds verified on at least one target) needs
+  hardware and is open.
 - Noticed on the way: when the reservoir sensor is silent the hub does not block the pumps
   (no reading is treated as not low). On hardware that should probably fail safe.
 

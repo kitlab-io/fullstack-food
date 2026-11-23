@@ -76,7 +76,7 @@ statuses:
     clears: "After an hour without dropouts."
   actuator_fault:
     doing: "Still sending commands; none are acknowledged, so nothing can be assumed about the actuator."
-    causes: ["the part is not in the node's firmware (a mains load without a smart-plug driver)", "firmware older than the site file", "the node is busy or frozen"]
+    causes: ["the part is not in the node's firmware (a mains load wired to a board instead of a smart power strip)", "the smart power strip cannot be reached by its bridge", "firmware older than the site file", "the node is busy or frozen"]
     checks: ["On the devices page, look for 'unanswered commands'", "Rebuild and reflash the node: fsf firmware build, fsf firmware flash", "Run fsf node test <node> --actuate"]
     clears: "When a command to it is acknowledged again."
   no_effect:

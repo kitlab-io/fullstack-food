@@ -13,7 +13,9 @@ and actions, simulator page), and `docs/plan/installation-plan.md` I1 (assembly 
 per part, pin validation), the software halves of I2 (ESPHome config generation, node
 contract suite) and I3 (observe mode, commissioning records, bench, calibration and zone
 acceptance tools), I4 (generated BOM, wiring diagrams, build guide, checklist and LED
-legend) and I5 (fault detection, troubleshooting guides, `fsf doctor`).
+legend), I5 (fault detection, troubleshooting guides, `fsf doctor`) and the software half of
+I6 (smart power strip bridge, `fsf init` with broker logins and ACLs, compose file for a
+real hub, provisioning script, compatibility matrix).
 Nothing has run on real hardware yet: no pin, wiring or power value in the catalog has been
 confirmed on a bench (`datasheet_checked: false`), and the generated firmware compiles with
 ESPHome but has never been flashed.
@@ -39,12 +41,13 @@ ESPHome but has never been flashed.
 | `docs/agents/` | Guides written for LLM agents, e.g. `diagnose-zone.md` |
 | `packages/hub/fsf_hub/commissioning.py` | Bench test, calibration and zone acceptance, driven over MQTT and recorded by the hub |
 | `packages/sim/fsf_sim` | Simulated nodes, zone physics, fault injection, `MockSystem` test harness |
+| `packages/kasa/fsf_kasa` | Bridge that makes a smart power strip a node: speaks the contract for its outlets and ends their leases |
 | `packages/web/fsf_web` | Dashboard service: FastAPI over the hub database and live MQTT state, shared login, actions sent as hub commands |
 | `packages/web/frontend` | Dashboard frontend (Vue 3, Vite, uPlot), built to `dist/` and served by `fsf_web` |
 | `tests/unit`, `tests/contract`, `tests/system`, `tests/web` | Core logic, MQTT and node contract, scenario tests, dashboard API |
 | `tests/browser` | Playwright test driving a mushroom grow through the dashboard; skipped unless `FSF_BROWSER_URL` is set |
 | `tests/hil` | The node contract suite against a real bench rig; skipped unless `FSF_HIL_SITE` and `FSF_HIL_MQTT_HOST` are set |
-| `deploy/` | Dockerfile and compose files: broker, hub, dashboard, and the simulator for the mock stack |
+| `deploy/` | Dockerfile; compose files (`base` + `mock` for the simulated stack, `base` + `sbc` for a real hub with broker logins); `os/` provisioning; `haos/` add-on skeleton |
 | `iot-manager/`, `copilot/`, `nodes/`, `electronics/`, `homeassistant/` | Legacy prototype, kept for reference until later phases replace it. Do not extend it. |
 
 ## Commands
@@ -57,6 +60,7 @@ just firmware sites/examples/houseplants --include-sim    # ESPHome configs into
 just node-test shelf-node --site <site> --actuate         # contract suite against a real broker
 just docs sites/examples/houseplants    # BOM, wiring, build guide, checklist, legend into build/docs/
 just doctor --site <site> --db hub.db   # health check of a running installation
+uv run fsf init my-site --from sites/examples/houseplants   # sites/local/my-site with credentials and broker ACLs
 just web-build         # build the dashboard frontend (needs Node.js)
 just lint              # ruff, same as CI
 just mock mushrooms 600   # simulated site against a real Mosquitto broker in Docker, 600x speed;
@@ -112,6 +116,13 @@ without FastAPI, and the ESPHome validation test without the `esphome` command.
 - Build documents are generated from the site file and the catalog (`fsf docs build`); fix
   the catalog or the site, never the generated file. Status labels and meanings live in the
   theme and are used by both the legend card and the dashboard.
+- Mains loads go on a smart power strip, which is a node of its own (board
+  `tplink.kasa-hs300`, devices with an `outlet`). `fsf_kasa` speaks the contract for it. Its
+  lease is weaker than a microcontroller's: the bridge, not the strip, switches off when a
+  lease ends, so a dead bridge leaves an outlet on. Say so wherever a guide mentions it.
+- On a real hub every MQTT client logs in. `fsf init` generates one login per node, for the
+  hub, the dashboard and the command line, and an ACL that confines each to its topics.
+  Each node's firmware uses its own `<node>_mqtt_username` / `_password` secrets.
 - Firmware is generated, never hand-edited: device blocks come from the ESPHome driver
   `template` of each model, the contract parts (status as birth and last will, leases that
   the node ends itself, acks) from `fsf_core/firmware`. Soil probes sit on an I2C ADC

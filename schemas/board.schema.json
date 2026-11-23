@@ -17,7 +17,8 @@
     "class": {
       "enum": [
         "sbc",
-        "mcu"
+        "mcu",
+        "smart_plug"
       ]
     },
     "runtimes": {
@@ -105,6 +106,11 @@
         "board"
       ],
       "additionalProperties": false
+    },
+    "outlets": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "smart_plug: how many outlets can be switched"
     },
     "notes": {
       "type": "string"
