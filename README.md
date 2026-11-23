@@ -39,6 +39,11 @@ To move a planting to its next stage (for example mushrooms from incubation to f
 docker compose -f deploy/compose/base.yaml -f deploy/compose/mock.yaml exec broker mosquitto_pub -t fsf/mushrooms/hub/cmd -m '{"id":"a1","name":"advance_stage","planting":"oyster-1"}'
 ```
 
+For a guided walk through every simulated scenario (faults, actions, a full grow), open
+[docs/guides/simulation-testing.html](docs/guides/simulation-testing.html) in a browser. It is a
+single self-contained page: it gives you the start command for your terminal, converts each wait
+to real seconds at the speed you chose, keeps your ticks, and lets you download the results.
+
 ### A ten-minute demo
 
 With the mushrooms site running (`FSF_SITE=mushrooms FSF_SPEED=120 docker compose ... up --build`), open

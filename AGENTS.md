@@ -38,6 +38,7 @@ ESPHome but has never been flashed.
 | `packages/hub/fsf_hub/detect.py` | Fault detection: no effect, silent actuator, stuck or impossible sensor, leaking reservoir, unstable node |
 | `catalog/troubleshooting.yaml` | What to do about each status, and guides by symptom; every theme status must have an entry |
 | `packages/core/fsf_core/troubleshooting.py`, `doctor.py` | Generated troubleshooting pages; `fsf doctor` health check |
+| `docs/guides/simulation-testing.html` | Interactive, self-contained checklist for testing the simulated scenarios by hand. Its expected results are checked against the simulator; update it when a status, button label or threshold changes |
 | `docs/agents/` | Guides written for LLM agents, e.g. `diagnose-zone.md` |
 | `packages/hub/fsf_hub/commissioning.py` | Bench test, calibration and zone acceptance, driven over MQTT and recorded by the hub |
 | `packages/sim/fsf_sim` | Simulated nodes, zone physics, fault injection, `MockSystem` test harness |
