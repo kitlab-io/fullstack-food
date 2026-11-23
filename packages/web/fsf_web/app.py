@@ -7,11 +7,17 @@ publishes to device topics.
 
 from __future__ import annotations
 
+import csv
+import io
+import json
+import re
+import tempfile
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Query
-from fastapi.responses import FileResponse, StreamingResponse
+from fastapi.responses import FileResponse, Response, StreamingResponse
+from starlette.background import BackgroundTask
 from fastapi.staticfiles import StaticFiles
 
 from fsf_core import Catalog, Site, seconds
@@ -23,6 +29,79 @@ RAW_UP_TO = 12 * 3600           # spans up to this long are served as raw sample
 FIVE_MIN_UP_TO = 4 * 86400      # then 5-minute rollups, then hourly
 RESOLUTIONS = {"raw": 0, "5m": 300, "1h": 3600}
 MAX_POINTS = 20000
+LEVELS = ("debug", "info", "warn", "error")
+LOG_SCAN = 5000                 # newest rows read from each table before filtering
+GROUPS = {"dose": "dose", "stage_advanced": "stage", "planting_started": "stage", "planting_finished": "stage",
+          "status_changed": "status", "limit": "limit", "interlock": "interlock", "node_status": "node",
+          "bad_payload": "node",
+          "command": "command", "command_rejected": "command", "command_failed": "command", "actuator_test": "command",
+          "override_cleared": "command", "zone_resumed": "command"}
+SECRET_KEY = re.compile(r"pass|secret|token|key|credential", re.IGNORECASE)
+
+
+def describe(kind: str, e: dict) -> str:
+    """One line a person can read for an event."""
+    if kind == "dose":
+        how = "by hand" if e.get("by") == "operator" else "automatic"
+        return f"{e['device']} dosed {e['volume_ml']:g} ml ({how})" + (", observe mode: not carried out" if e.get("observed") else "")
+    if kind == "status_changed":
+        return f"status {e.get('was') or 'none'} -> {e['state']}" + (f" (also {', '.join(a for a in e['active'] if a != e['state'])})"
+                                                                     if len(e.get("active", [])) > 1 else "")
+    if kind == "stage_advanced":
+        return f"{e['from_stage']} -> {e['to_stage']} (by {e['by']})"
+    if kind == "planting_started":
+        return f"started with recipe {e.get('recipe')}"
+    if kind == "planting_finished":
+        return f"finished (by {e.get('by')})"
+    if kind == "limit":
+        if e.get("observed"):
+            return f"{e['device']} would have hit {e['reason']} (observe mode: nothing was switched)"
+        return f"{e['device']} hit {e['reason']} and was switched off"
+    if kind == "interlock":
+        return f"{e.get('loop')} blocked: {e['reason']}"
+    if kind == "node_status":
+        return f"node {e['node']} {'online' if e['online'] else 'offline'}"
+    if kind == "command":
+        return f"{e['command'].get('name')} accepted" + (f" from {e['by']}" if e.get("by") else "")
+    if kind == "command_rejected":
+        return f"{e['command'].get('name')} rejected: {e['error']}"
+    if kind == "command_failed":
+        return f"{e['device']} refused a command: {e.get('error')}"
+    if kind == "actuator_test":
+        return f"test pulse on {e['device']} for {e['duration_s']:g} s"
+    if kind == "bad_payload":
+        return f"{e['device']} sent a message that is not a JSON object"
+    if kind == "override_cleared":
+        return f"override on {', '.join(e['quantities'])} ended ({e['reason']})"
+    if kind == "zone_resumed":
+        return f"resumed ({e['reason']})"
+    return kind.replace("_", " ")
+
+
+def redact(node):
+    """A copy with the value of anything that looks like a secret replaced."""
+    if isinstance(node, dict):
+        return {k: "<redacted>" if SECRET_KEY.search(str(k)) and not isinstance(v, (dict, list)) else redact(v)
+                for k, v in node.items()}
+    if isinstance(node, list):
+        return [redact(item) for item in node]
+    return node
+
+
+def as_file(rows: list[dict], columns: list[str], fmt: str, name: str) -> Response:
+    """rows as a JSON Lines or CSV download."""
+    if fmt == "jsonl":
+        body = "".join(json.dumps(row, separators=(",", ":")) + "\n" for row in rows)
+        media = "application/x-ndjson"
+    else:
+        out = io.StringIO()
+        writer = csv.writer(out, lineterminator="\n")
+        writer.writerow(columns)
+        for row in rows:
+            writer.writerow([json.dumps(row[c], separators=(",", ":")) if isinstance(row.get(c), (dict, list)) else row.get(c)
+                             for c in columns])
+        body, media = out.getvalue(), "text/csv"
+    return Response(body, media_type=media, headers={"Content-Disposition": f'attachment; filename="{name}.{fmt}"'})
 
 
 def _parse(value: str | None, name: str) -> datetime | None:
@@ -57,7 +136,9 @@ def on_intervals(commands: list[dict]) -> list[list[float]]:
     return intervals
 
 
-def create_app(site: Site, catalog: Catalog, db_path: str, live: Live, static_dir: Path | None = None) -> FastAPI:
+def create_app(site: Site, catalog: Catalog, db_path: str, live: Live, static_dir: Path | None = None,
+               developer: bool = False) -> FastAPI:
+    """developer: also allow downloading the whole database."""
     app = FastAPI(title="Fullstack Food", docs_url="/api/docs", openapi_url="/api/openapi.json", redoc_url=None)
     components = catalog.items["Component"]
 
@@ -126,6 +207,7 @@ def create_app(site: Site, catalog: Catalog, db_path: str, live: Live, static_di
                 "planting": planting, "readings": readings,
                 "nodes": [{"id": n, "online": snap["nodes"].get(n, {}).get("online")} for n in nodes],
                 "last_reading_age_s": min(ages) if ages else None,
+                "observing": (hub or {}).get("observing", {}).get(zone_id),
                 "paused": zone_id in (hub or {}).get("paused", {}),
                 "paused_until": (hub or {}).get("paused", {}).get(zone_id),
                 "overrides": overrides}
@@ -265,6 +347,10 @@ def create_app(site: Site, catalog: Catalog, db_path: str, live: Live, static_di
     def get_devices() -> dict:
         snap, now = live.snapshot(), live.now()
         actuators = (snap["hub"] or {}).get("actuators", {})
+        tested: dict[str, dict] = {}
+        for record in (snap["hub"] or {}).get("commissioning", []):
+            if record["scope"] == "device":
+                tested.setdefault(record["subject"], {})[record["step"]] = {k: record.get(k) for k in ("ok", "t", "by")}
         day_start = now - timedelta(hours=24)
         try:
             db = store()
@@ -283,6 +369,7 @@ def create_app(site: Site, catalog: Catalog, db_path: str, live: Live, static_di
                             "driver_status": driver["status"] if driver else None, "pins": dev.raw.get("pins", {}),
                             "calibration": dev.raw.get("calibration"),
                             "datasheet_checked": dev.model.get("datasheet_checked"),
+                            "commissioning": tested.get(dev.id, {}),
                             "age_s": _age(now, entry["received"]) if entry else None}
                     if dev.cls == "sensor":
                         item["values"] = [{"quantity": m["quantity"], "unit": m.get("unit"), "value": state.get(m["quantity"])}
@@ -311,9 +398,124 @@ def create_app(site: Site, catalog: Catalog, db_path: str, live: Live, static_di
     # ------------------------------------------------------------------ live updates
 
     @app.get("/api/stream")
-    def stream(limit: int | None = None) -> StreamingResponse:
-        return StreamingResponse(live.stream(limit=limit), media_type="text/event-stream",
+    def stream(limit: int | None = None, raw: bool = False) -> StreamingResponse:
+        return StreamingResponse(live.stream(limit=limit, raw=raw), media_type="text/event-stream",
                                  headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
+
+    # ------------------------------------------------------------------ log and raw data
+
+    def log_rows(db: Store, since: datetime | None, until: datetime | None) -> list[dict]:
+        """Events and decision-trace rows as one list, oldest first."""
+        rows = []
+        for e in db.events(since=since, until=until, newest=LOG_SCAN):
+            kind, device = e["kind"], e.get("device")
+            zone = e["zone"] or next(iter(site.zones_of_device(device)), None) if device in site.devices else e["zone"]
+            data = {k: v for k, v in e.items() if k not in ("t", "kind", "zone", "planting", "level", "id")}
+            rows.append({"id": f"e{e['id']}", "t": e["t"].isoformat(), "source": "event", "level": e["level"], "kind": kind,
+                         "group": GROUPS.get(kind, "other"), "zone": zone, "device": device, "node": e.get("node"),
+                         "planting": e["planting"], "text": describe(kind, e), "data": data})
+        for d in db.decisions(since=since, until=until, newest=LOG_SCAN):
+            reason = d["reason"]
+            level = "warn" if reason.startswith("fail-safe") else "info" if reason.startswith("blocked") else "debug"
+            rows.append({"id": f"d{d['id']}", "t": d["t"].isoformat(), "source": "decision", "level": level, "kind": "decision",
+                         "group": "decision", "zone": d["zone"], "device": d["device"], "node": None, "planting": None,
+                         "text": f"{d['loop']}: {d['device']} {d['action']}, {reason}",
+                         "data": {"loop": d["loop"], "want": d["want"], "action": d["action"], "reason": reason, "inputs": d["inputs"]}})
+        rows.sort(key=lambda r: (r["t"], r["id"]))
+        return rows
+
+    @app.get("/api/log")
+    def get_log(level: str = "debug", group: str | None = None, zone: str | None = None, device: str | None = None,
+                planting: str | None = None, q: str | None = None, start: str | None = Query(None, alias="from"),
+                end: str | None = Query(None, alias="to"), limit: int = Query(200, ge=1, le=LOG_SCAN),
+                format: str = "json"):
+        """The event log and the decision trace together, filtered. Newest `limit` matches, oldest first."""
+        if level not in LEVELS:
+            raise HTTPException(422, f"level must be one of {', '.join(LEVELS)}")
+        if format not in ("json", "jsonl", "csv"):
+            raise HTTPException(422, "format must be json, jsonl or csv")
+        wanted = LEVELS[LEVELS.index(level):]
+        groups = set(group.split(",")) if group else None
+        needle = q.lower() if q else None
+        db = store()
+        try:
+            rows = log_rows(db, _parse(start, "from"), _parse(end, "to"))
+        finally:
+            db.close()
+        rows = [r for r in rows
+                if r["level"] in wanted and (groups is None or r["group"] in groups)
+                and (zone is None or r["zone"] == zone) and (device is None or r["device"] == device)
+                and (planting is None or r["planting"] == planting)
+                and (needle is None or needle in json.dumps(r).lower())][-limit:]
+        if format != "json":
+            return as_file(rows, ["t", "level", "kind", "zone", "device", "planting", "text", "data"], format, f"{site.id}-log")
+        return {"now": live.now().isoformat(), "rows": rows, "groups": sorted(set(GROUPS.values()) | {"decision", "other"}),
+                "levels": list(LEVELS)}
+
+    @app.get("/api/mqtt/recent")
+    def get_mqtt(topic: str | None = None, limit: int = Query(200, ge=1, le=2000)) -> dict:
+        return {"now": live.now().isoformat(), "messages": live.recent(topic, limit)}
+
+    @app.get("/api/readings")
+    def get_readings(device: str, quantity: str, start: str | None = Query(None, alias="from"),
+                     end: str | None = Query(None, alias="to"), format: str = "json"):
+        """Raw samples of one device, never rolled up."""
+        if device not in site.devices:
+            raise HTTPException(404, f"unknown device {device!r}")
+        if format not in ("json", "csv"):
+            raise HTTPException(422, "format must be json or csv")
+        until = _parse(end, "to") or live.now()
+        since = _parse(start, "from") or until - timedelta(hours=6)
+        db = store()
+        try:
+            samples = db.readings(device, quantity, since, until)
+        finally:
+            db.close()
+        if len(samples) > MAX_POINTS and format == "json":
+            raise HTTPException(422, f"{len(samples)} samples: ask for a shorter range or download the CSV")
+        rows = [{"t": t.isoformat(), "value": value} for t, value in samples]
+        if format == "csv":
+            return as_file(rows, ["t", "value"], "csv", f"{site.id}-{device}-{quantity}")
+        return {"device": device, "quantity": quantity, "from": since.isoformat(), "to": until.isoformat(), "samples": rows}
+
+    @app.get("/api/export/diagnostics")
+    def export_diagnostics() -> Response:
+        """Everything needed to look at a problem from afar, with secrets replaced."""
+        now = live.now()
+        snap = live.snapshot()
+        bundle = {"generated": now.isoformat(), "site": redact(site.raw), "hub": snap["hub"], "zones": snap["zones"],
+                  "nodes": snap["nodes"], "devices": snap["devices"], "log": [], "database": None}
+        try:
+            db = store()
+            try:
+                bundle["log"] = log_rows(db, now - timedelta(hours=24), None)
+                bundle["database"] = db.counts()
+            finally:
+                db.close()
+        except HTTPException as err:
+            bundle["database"] = str(err.detail)
+        return Response(json.dumps(bundle, indent=1), media_type="application/json",
+                        headers={"Content-Disposition": f'attachment; filename="{site.id}-diagnostics.json"'})
+
+    @app.get("/api/export/db")
+    def export_db() -> FileResponse:
+        if not developer:
+            raise HTTPException(403, "database download is off; start the dashboard with --developer to allow it")
+        db = store()
+        handle, target = tempfile.mkstemp(suffix=".db")
+        try:
+            import os
+            os.close(handle)
+            os.unlink(target)
+            db.snapshot(target)
+        finally:
+            db.close()
+        return FileResponse(target, filename=f"{site.id}-hub.db", media_type="application/vnd.sqlite3",
+                            background=BackgroundTask(lambda: Path(target).unlink(missing_ok=True)))
+
+    @app.get("/api/meta")
+    def meta() -> dict:
+        return {"developer": developer, "raw_buffer": len(live.recent(limit=2000))}
 
     # ------------------------------------------------------------------ frontend
 

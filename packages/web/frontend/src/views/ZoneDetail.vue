@@ -68,6 +68,9 @@ const led = computed(() => zone.value.led)
         <StatusBadge :status="zone.status" large />
       </div>
       <p v-if="others.length" class="muted">Also: {{ others.map(statusLabel).join(', ') }}</p>
+      <p v-if="zone.observing" class="banner">
+        Observe mode ({{ zone.observing }}): decisions below are what the hub would do; nothing is switched.
+      </p>
       <p v-if="zone.paused" class="banner">
         Paused{{ zone.paused_until ? ` until ${clock(zone.paused_until, tz, true)}` : ' until someone resumes it' }}: every actuator is off.
       </p>
@@ -133,6 +136,7 @@ const led = computed(() => zone.value.led)
               <template v-if="d.inputs.quantity"> · {{ d.inputs.quantity }} was {{ d.inputs.value ?? 'not available' }}</template>
               <template v-if="d.inputs.target !== undefined"> · target {{ d.inputs.target }}</template>
               <template v-if="d.want && d.action === 'off'"> · wants on but is held off</template>
+              <template v-if="d.inputs.observed"> · observe mode: not carried out</template>
             </p>
           </div>
         </li>

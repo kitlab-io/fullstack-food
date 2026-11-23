@@ -4,6 +4,11 @@
     fsf firmware build <site>               one ESPHome config per node
     fsf firmware flash <site> <node>        compile and upload with the ESPHome command line
     fsf node test <node> --site <site>      run the node contract suite against a broker
+    fsf bench <device> --site <site>        bench-test one device and record the result
+    fsf calibrate <device> --site <site>    measure a device's calibration values
+    fsf zone mode <zone> observe|active     compute-only or really switching
+    fsf zone test <zone> --site <site>      shortened acceptance run of a zone in observe mode
+    fsf commissioning --site <site>         what has been tested so far
 """
 
 from __future__ import annotations
@@ -97,6 +102,77 @@ def _node_test(args, root: Path, catalog: Catalog) -> int:
     return 1 if failed else 0
 
 
+class _Console:
+    """Talks to the person doing the commissioning."""
+
+    def say(self, text: str) -> None:
+        print(f"\n>> {text}", flush=True)
+
+    def confirm(self, question: str) -> bool:
+        return input(f"   {question}? [y/N] ").strip().lower() in ("y", "yes")
+
+    def number(self, question: str) -> float:
+        while True:
+            try:
+                return float(input(f"   {question}: ").strip())
+            except ValueError:
+                print("   a number, please")
+
+
+def _commissioning(args, root: Path, catalog: Catalog) -> int:
+    from fsf_hub.commissioning import Bench, Calibrate, CommissioningError, HubClient, ZoneAcceptance
+
+    from .bus import MqttBus
+    from .clock import SystemClock
+
+    site = load_site(args.site, catalog)
+    bus = MqttBus(args.mqtt_host, args.mqtt_port, client_id=f"fsf-commission-{site.id}",
+                  username=os.environ.get("FSF_MQTT_USERNAME"), password=os.environ.get("FSF_MQTT_PASSWORD"))
+
+    def wait(seconds: float) -> None:
+        deadline = time.monotonic() + seconds
+        while time.monotonic() < deadline:
+            bus.poll()
+            time.sleep(0.05)
+        bus.poll()
+
+    try:
+        hub = HubClient(site.id, bus, wait, by=os.environ.get("USER") or os.environ.get("USERNAME") or "fsf")
+        if args.command == "commissioning":
+            hub.observing(next(iter(site.zones)))        # waits for the retained hub state
+            for zone_id, why in sorted(hub.state["observing"].items()):
+                print(f"zone {zone_id}: observe ({why})")
+            for record in sorted(hub.state["commissioning"], key=lambda r: (r["scope"], r["subject"], r["step"])):
+                print(f"{record['scope']} {record['subject']}: {record['step']} {'passed' if record['ok'] else 'FAILED'} "
+                      f"{record['t'][:16]} by {record.get('by') or 'unknown'}")
+            return 0
+        if args.command == "zone" and args.action == "mode":
+            print(f"zone {args.zone}: {hub.call('set_zone_mode', zone=args.zone, mode=args.mode)['mode']}")
+            return 0
+        if args.command == "bench":
+            checks = Bench(site, catalog, args.device, bus, wait, _Console(), hub).run()
+        elif args.command == "calibrate":
+            checks, values = Calibrate(site, catalog, args.device, bus, wait, _Console(), hub).run()
+            if values:
+                shown = ", ".join(f"{k}: {v}" for k, v in values.items())
+                target = "the device" if "flow_ml_per_s" in values else "calibration: { ... } of the device"
+                print(f"\nput into {target} in the site file, then rebuild and reflash the node:\n  {shown}")
+        else:
+            print(f"running zone {args.zone} for {args.minutes:g} min at {args.speed:g}x; its actuators will switch", flush=True)
+            checks = ZoneAcceptance(site, catalog, args.zone, bus, SystemClock(), wait, hub, stage=args.stage,
+                                    speed=args.speed, run_s=args.minutes * 60).run()
+    except CommissioningError as err:
+        print(f"{args.command}: {err}")
+        return 1
+    finally:
+        bus.close()
+    for check in checks:
+        print(check)
+    failed = sum(not c.ok for c in checks)
+    print(f"{len(checks) - failed} passed, {failed} failed; recorded by the hub")
+    return 1 if failed else 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="fsf")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -124,6 +200,30 @@ def main(argv: list[str] | None = None) -> int:
     test.add_argument("--mqtt-port", type=int, default=int(os.environ.get("FSF_MQTT_PORT", "1883")))
     test.add_argument("--actuate", action="store_true", help="also switch every actuator on the node for a few seconds")
     test.add_argument("--last-will", action="store_true", help="ask for the node to be unplugged and check it is reported offline")
+
+    def broker(p) -> None:
+        p.add_argument("--site", required=True, help="site directory or site.yaml")
+        p.add_argument("--mqtt-host", default=os.environ.get("FSF_MQTT_HOST", "localhost"))
+        p.add_argument("--mqtt-port", type=int, default=int(os.environ.get("FSF_MQTT_PORT", "1883")))
+
+    bench = sub.add_parser("bench", help="bench-test one device through the running hub")
+    bench.add_argument("device")
+    broker(bench)
+    calibrate = sub.add_parser("calibrate", help="measure the calibration values of one device")
+    calibrate.add_argument("device")
+    broker(calibrate)
+    zone = sub.add_parser("zone", help="zone mode and acceptance").add_subparsers(dest="action", required=True)
+    mode = zone.add_parser("mode", help="observe: decisions are logged, nothing is switched")
+    mode.add_argument("zone")
+    mode.add_argument("mode", choices=["observe", "active"])
+    broker(mode)
+    ztest = zone.add_parser("test", help="run a shortened recipe stage for real in a zone that is in observe mode")
+    ztest.add_argument("zone")
+    ztest.add_argument("--stage", help="recipe stage to run (default: the first that fits the zone)")
+    ztest.add_argument("--speed", type=float, default=60.0, help="divide every duration in the stage by this")
+    ztest.add_argument("--minutes", type=float, default=30.0, help="how long to run")
+    broker(ztest)
+    broker(sub.add_parser("commissioning", help="list what has been tested"))
     args = parser.parse_args(argv)
 
     root = find_repo_root(Path.cwd())
@@ -134,7 +234,8 @@ def main(argv: list[str] | None = None) -> int:
         print("\n".join(f"  {p}" for p in err.problems))
         return 1
     try:
-        return {"validate": _validate, "firmware": _firmware, "node": _node_test}[args.command](args, root, catalog)
+        handler = {"validate": _validate, "firmware": _firmware, "node": _node_test}.get(args.command, _commissioning)
+        return handler(args, root, catalog)
     except ConfigError as err:
         print(f"site {args.site}: INVALID")
         print("\n".join(f"  {p}" for p in err.problems))

@@ -185,6 +185,8 @@ def build_node(site: Site, catalog: Catalog, node: dict) -> NodeBuild:
         if dev.cls == "sensor":
             wanted = [m["quantity"] for role in dev.roles for m in components[role].get("measures", [])]
             have = [q for q in wanted if f"{ident(dev.id)}_{q}" in _ids(snippet)]
+            if have and f"{ident(dev.id)}_raw" in _ids(parts):
+                have.append("raw")                      # the uncalibrated value, which `fsf calibrate` reads
             if have:
                 sensors.append((dev, have))
             elif not dev.model.get("provides"):
@@ -250,9 +252,10 @@ def build_node(site: Site, catalog: Catalog, node: dict) -> NodeBuild:
     for dev, quantities in sensors:
         entities = [(q, f"id({ident(dev.id)}_{q}).state") for q in quantities]
         body = 'root["t"] = fsf_now();\n' + "\n".join(
-            f'if (!isnan({value})) root["{q}"] = fsf_round2({value});' for q, value in entities)
+            f'if (!isnan({value})) root["{q}"] = {"fsf_round3" if q == "raw" else "fsf_round2"}({value});' for q, value in entities)
         # A device with nothing valid to say stays silent, so the hub sees it go stale.
-        reports.append({"if": {"condition": {"lambda": Lambda("return " + " || ".join(f"!isnan({v})" for _, v in entities) + ";")},
+        measured = [v for q, v in entities if q != "raw"]
+        reports.append({"if": {"condition": {"lambda": Lambda("return " + " || ".join(f"!isnan({v})" for v in measured) + ";")},
                                "then": [_publish(topic(dev, "state"), body, retain=True)]}})
 
     status = topics.node_status(sid, node_id)

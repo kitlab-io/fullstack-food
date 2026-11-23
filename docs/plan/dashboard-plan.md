@@ -1,7 +1,7 @@
 # Web dashboard plan
 
 Status (2026-11-22): the recommended options in section 9 are accepted. Phases D1 and D2
-are built; D3 to D5 are not started. It builds on the hub, simulator and
+and D3 are built; D4 and D5 are not started. It builds on the hub, simulator and
 MQTT contract described in `AGENTS.md`.
 
 How D1 differs from the text below:
@@ -34,6 +34,21 @@ How D2 stands:
   durations on the stage timeline, per-status troubleshooting links, commissioning state.
 - The decision trace now also stores a row when a loop's setpoint changes, so the "why"
   panel shows the target in force.
+
+How D3 stands:
+
+- Log page: the event log and the decision trace as one table, filtered by level, kind,
+  zone, device and text, following live, each row opening to its full record, with CSV and
+  JSON Lines export. Decision rows are `debug`, `info` when blocked, `warn` on a fail-safe.
+- Raw data page: live MQTT tail (last 2000 messages buffered in the service, topic filter,
+  pause, a badge when a payload breaks its schema), a readings browser with CSV download,
+  the diagnostics bundle (secrets replaced), and the database download behind `--developer`.
+- The done-when is a test: a silent sensor is found from the log and devices API alone.
+  The pages were also checked by hand against the mock stack.
+- Not in D3: the publish tool (it writes, so it waits for the login in D4), the retained
+  flag in the tail (the bus does not pass it on), planting as a log filter in the UI, and a
+  link from a log row to the chart at that moment (rows link to the zone).
+- Found on the way and fixed: a payload that was not JSON made the hub raise.
 
 ## 1. Goals
 

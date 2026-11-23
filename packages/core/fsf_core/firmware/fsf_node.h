@@ -56,6 +56,7 @@ inline std::string fsf_now() {
 }
 
 inline float fsf_round2(float value) { return roundf(value * 100.0f) / 100.0f; }
+inline float fsf_round3(float value) { return roundf(value * 1000.0f) / 1000.0f; }
 
 // ---------------------------------------------------------------------------- status LEDs
 

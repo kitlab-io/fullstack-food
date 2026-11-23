@@ -16,7 +16,9 @@
         "clear_override",
         "pause_zone",
         "resume_zone",
-        "actuator_test"
+        "actuator_test",
+        "set_zone_mode",
+        "commission"
       ]
     },
     "by": {
@@ -63,6 +65,38 @@
       "type": "number",
       "exclusiveMinimum": 0,
       "maximum": 10
+    },
+    "mode": {
+      "enum": [
+        "observe",
+        "active"
+      ]
+    },
+    "scope": {
+      "enum": [
+        "device",
+        "node",
+        "zone"
+      ]
+    },
+    "subject": {
+      "type": "string"
+    },
+    "step": {
+      "enum": [
+        "bench",
+        "calibration",
+        "node_test",
+        "zone_test",
+        "soak"
+      ]
+    },
+    "ok": {
+      "type": "boolean"
+    },
+    "data": {
+      "type": "object",
+      "description": "Measured values and notes of a commissioning step"
     }
   },
   "required": [
@@ -189,6 +223,44 @@
       "then": {
         "required": [
           "device"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "name": {
+            "const": "set_zone_mode"
+          }
+        },
+        "required": [
+          "name"
+        ]
+      },
+      "then": {
+        "required": [
+          "zone",
+          "mode"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "name": {
+            "const": "commission"
+          }
+        },
+        "required": [
+          "name"
+        ]
+      },
+      "then": {
+        "required": [
+          "scope",
+          "subject",
+          "step",
+          "ok"
         ]
       }
     }

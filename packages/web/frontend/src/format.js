@@ -29,6 +29,7 @@ const STATUSES = {
   sensor_stale: 'Sensor not reporting',
   offline: 'Node offline',
   paused: 'Paused',
+  observing: 'Observing only',
 }
 
 export const unit = (code) => UNITS[code] ?? code ?? ''

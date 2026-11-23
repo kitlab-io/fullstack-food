@@ -32,6 +32,7 @@ def main() -> None:
                         help="bus: follow the simulator's time, as the hub does in the mock stack")
     parser.add_argument("--host", default=os.environ.get("FSF_WEB_HOST", "127.0.0.1"))
     parser.add_argument("--port", type=int, default=int(os.environ.get("FSF_WEB_PORT", "8080")))
+    parser.add_argument("--developer", action="store_true", help="allow downloading the whole database")
     parser.add_argument("--static", default=os.environ.get("FSF_WEB_STATIC"), help="folder with the built frontend")
     args = parser.parse_args()
 
@@ -53,7 +54,7 @@ def main() -> None:
         time.sleep(0.05)
 
     static = Path(args.static) if args.static else root / "packages" / "web" / "frontend" / "dist"
-    app = create_app(site, catalog, args.db, live, static)
+    app = create_app(site, catalog, args.db, live, static, developer=args.developer)
     print(f"web: site {site.id} on http://{args.host}:{args.port} (db {args.db}, clock {args.clock})", flush=True)
     try:
         uvicorn.run(app, host=args.host, port=args.port, log_level="warning")

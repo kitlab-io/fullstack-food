@@ -40,6 +40,7 @@ function due(planting) {
 
       <p v-for="status in banners(zone)" :key="status" class="banner">
         <strong>{{ statusLabel(status) }}.</strong> {{ NEEDS_PERSON[status] }}
+        <template v-if="status === 'observing' && zone.observing"> Reason: {{ zone.observing }}.</template>
       </p>
       <p v-if="others(zone).length" class="small muted">
         Also: {{ others(zone).map(statusLabel).join(', ') }}

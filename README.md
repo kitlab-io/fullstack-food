@@ -24,7 +24,7 @@ FSF_SITE=mushrooms FSF_SPEED=600 docker compose -f deploy/compose/base.yaml -f d
 ```
 
 `FSF_SITE` is `houseplants`, `microgreens` or `mushrooms`. `FSF_SPEED` is simulated seconds
-per real second. The dashboard is at http://localhost:8080 (read-only: zones, charts, devices).
+per real second. The dashboard is at http://localhost:8080 (read-only: zones, charts, devices, log, raw MQTT traffic).
 The hub log prints each zone status change. To watch the MQTT traffic:
 
 ```bash
@@ -47,6 +47,11 @@ fsf firmware build sites/local/my-site           # one ESPHome config per node i
 fsf firmware flash sites/local/my-site shelf-node    # needs `pip install esphome` and a filled-in secrets.yaml
 fsf node test shelf-node --site sites/local/my-site --mqtt-host <broker> --actuate
 ```
+
+Then commission in stages, each recorded by the hub: `fsf bench <device>`, `fsf calibrate
+<device>`, `fsf zone test <zone>`, and finally `fsf zone mode <zone> active`. A zone with an
+actuator that has not passed its bench test stays in observe mode: the hub logs what it
+would do and switches nothing.
 
 `fsf node test` runs the same contract checks the simulated nodes pass: payloads match
 `schemas/mqtt/`, an on-command ends by itself, `off` is honoured. With `--actuate` it switches

@@ -1,7 +1,8 @@
 # Installation, assembly, testing and troubleshooting plan
 
 Status (2026-11-22): the recommended options in section 9 are accepted. Phase I1 is built,
-and so is the software half of I2; the hardware half of I2 and I3 to I6 are not started. Today the system runs only against simulated nodes; this plan is
+and so are the software halves of I2 and I3; their hardware halves and I4 to I6 are not
+started. Today the system runs only against simulated nodes; this plan is
 the path from that to a working physical installation that someone else can replicate.
 
 How I1 stands:
@@ -26,9 +27,11 @@ How I2 stands:
   message per device every 60 s, and per actuator a command handler whose on-command starts
   a lease script that switches off by itself (capped at one hour), with everything off
   after a reboot. `fsf firmware flash` wraps `esphome run`.
-- All four example nodes pass `esphome config` (ESPHome 2026.11.0). Nothing has been
-  compiled, so the C++ in `fsf_node.h` and in the lambdas is unproven, and nothing has been
-  flashed. The I2 done-when (a real node passes the contract suite) is still open.
+- All four example nodes pass `esphome config`, and the house plant node and the mushroom
+  fruiting node compile without warnings (ESPHome 2026.11.0, ESP-IDF 5.5.6). Nothing has been
+  flashed, so behaviour on a board is unproven. The I2 done-when (a real node passes the
+  contract suite) is still open. On Windows the ESP-IDF toolchain needs a short install path
+  (`ESPHOME_ESP_IDF_PREFIX`) and does not install from Git Bash.
 - `fsf node test <node>` is the contract suite: online status, sensor reports, payload
   schemas, and with `--actuate` lease expiry, off, refusal of on without a duration and of
   unknown commands, LED render; `--last-will` asks for the plug to be pulled. The simulated
@@ -38,6 +41,28 @@ How I2 stands:
   hardware, so the mushroom build cannot run for real yet.
 - Calibration values in the example sites are examples, not measurements.
 - Not done: the CircuitPython reference client, a browser flasher, release binaries.
+
+How I3 stands:
+
+- Observe mode per zone: decisions are computed and logged (`observed: true`), nothing is
+  switched. Set by an operator, and automatic while a real actuator in the zone has no
+  passed bench test. Simulated nodes are exempt.
+- Commissioning records (who, when, measured values) are kept by the hub and shown on the
+  dashboard's devices page. `fsf commissioning` lists them.
+- `fsf bench <device>`: a sensor must report twice, be within the model's plausible range
+  and visibly respond to the stimulus; an actuator gets a test pulse through the hub and the
+  builder confirms it.
+- `fsf calibrate <device>`: soil probe dry/wet, reservoir empty/full, pump flow from a timed
+  run, LED segment check. It prints the values to put in the site file; it does not edit the
+  file, and the node must be rebuilt and reflashed for them to take effect. Nodes now also
+  report the uncalibrated `raw` value this needs.
+- `fsf zone test <zone>`: with the zone in observe mode on the real hub, a second, headless
+  hub runs the zone's stage with every duration divided by `--speed` and checks that each
+  loop switched its actuator, that the controlled quantity moved the right way, that every
+  command was acknowledged and that no sensor went quiet.
+- All of this is tested against simulated nodes only. Not done: the interactive fault
+  checks of stage 5 (pull a sensor, empty the reservoir), the 24 h dry-run review and the
+  48 h soak as tools, and `tests/hil/` holds only the node contract suite.
 - Noticed on the way: when the reservoir sensor is silent the hub does not block the pumps
   (no reading is treated as not low). On hardware that should probably fail safe.
 

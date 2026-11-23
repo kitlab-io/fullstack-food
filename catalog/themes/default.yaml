@@ -3,7 +3,7 @@ id: default
 brightness: { day: 0.5, night: 0.05, night_hours: [22, 7] }
 # Highest priority first. A zone shows the first status in this list that is active.
 priority: [offline, paused, sensor_stale, critical, reservoir_low, too_hot, too_cold, needs_water,
-           too_wet, too_dry, too_humid, stale_air, stage_ready, ok, idle]
+           too_wet, too_dry, too_humid, stale_air, stage_ready, observing, ok, idle]
 # Colours are [R, G, B, W]. Every status also has a distinct effect or hue family so
 # states stay distinguishable without relying on red/green alone.
 statuses:
@@ -22,3 +22,4 @@ statuses:
   sensor_stale:  { color: [255, 0, 255, 0],  effect: blink }
   offline:       { color: [255, 0, 255, 0],  effect: blink_slow }
   paused:        { color: [0, 0, 0, 40],     effect: blink_slow }
+  observing:     { color: [0, 70, 90, 0],    effect: breathe }

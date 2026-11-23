@@ -32,6 +32,8 @@ CREATE TABLE IF NOT EXISTS commands (id TEXT PRIMARY KEY, t TEXT NOT NULL, devic
     data TEXT NOT NULL, ack_t TEXT, ok INTEGER, error TEXT);
 CREATE INDEX IF NOT EXISTS commands_device_t ON commands (device, t);
 CREATE INDEX IF NOT EXISTS commands_t ON commands (t);
+CREATE TABLE IF NOT EXISTS commissioning (id INTEGER PRIMARY KEY, t TEXT NOT NULL, scope TEXT NOT NULL, subject TEXT NOT NULL,
+    step TEXT NOT NULL, ok INTEGER NOT NULL, by TEXT, data TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS plantings (id TEXT PRIMARY KEY, state TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);
 """
@@ -92,8 +94,9 @@ class Store:
                          (t.isoformat(), kind, zone, planting, json.dumps(data), level))
 
     def events(self, kind: str | None = None, zone: str | None = None, since: datetime | None = None,
-               min_level: str | None = None) -> list[dict]:
-        query, args = "SELECT t, kind, zone, planting, data, level FROM events WHERE 1=1", []
+               min_level: str | None = None, until: datetime | None = None, newest: int | None = None) -> list[dict]:
+        """Oldest first. With `newest`, only that many of the most recent matches."""
+        query, args = "SELECT t, kind, zone, planting, data, level, id FROM events WHERE 1=1", []
         for column, value in (("kind", kind), ("zone", zone)):
             if value is not None:
                 query += f" AND {column} = ?"
@@ -105,9 +108,14 @@ class Store:
             wanted = LEVELS[LEVELS.index(min_level):]
             query += f" AND level IN ({', '.join('?' * len(wanted))})"
             args += wanted
+        if until is not None:
+            query += " AND t < ?"
+            args.append(until.isoformat())
+        if newest is not None:
+            query = f"SELECT * FROM ({query} ORDER BY id DESC LIMIT {int(newest)})"
         rows = self._db.execute(query + " ORDER BY id", args)
-        return [{**json.loads(d), "t": datetime.fromisoformat(t), "kind": k, "zone": z, "planting": p, "level": lv}
-                for t, k, z, p, d, lv in rows]
+        return [{**json.loads(d), "t": datetime.fromisoformat(t), "kind": k, "zone": z, "planting": p, "level": lv, "id": i}
+                for t, k, z, p, d, lv, i in rows]
 
     # -- decision trace
     def decision(self, t: datetime, zone: str, loop: str, device: str, want: bool, action: str, reason: str,
@@ -115,8 +123,9 @@ class Store:
         self._db.execute("INSERT INTO decisions (t, zone, loop, device, want, action, reason, data) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
                          (t.isoformat(), zone, loop, device, int(want), action, reason, json.dumps(inputs)))
 
-    def decisions(self, zone: str | None = None, loop: str | None = None, since: datetime | None = None) -> list[dict]:
-        query, args = "SELECT t, zone, loop, device, want, action, reason, data FROM decisions WHERE 1=1", []
+    def decisions(self, zone: str | None = None, loop: str | None = None, since: datetime | None = None,
+                  until: datetime | None = None, newest: int | None = None) -> list[dict]:
+        query, args = "SELECT t, zone, loop, device, want, action, reason, data, id FROM decisions WHERE 1=1", []
         for column, value in (("zone", zone), ("loop", loop)):
             if value is not None:
                 query += f" AND {column} = ?"
@@ -124,9 +133,14 @@ class Store:
         if since is not None:
             query += " AND t >= ?"
             args.append(since.isoformat())
+        if until is not None:
+            query += " AND t < ?"
+            args.append(until.isoformat())
+        if newest is not None:
+            query = f"SELECT * FROM ({query} ORDER BY id DESC LIMIT {int(newest)})"
         rows = self._db.execute(query + " ORDER BY id", args)
         return [{"t": datetime.fromisoformat(t), "zone": z, "loop": lp, "device": dev, "want": bool(w), "action": a,
-                 "reason": r, "inputs": json.loads(d)} for t, z, lp, dev, w, a, r, d in rows]
+                 "reason": r, "inputs": json.loads(d), "id": i} for t, z, lp, dev, w, a, r, d, i in rows]
 
     # -- commands and acks
     def command(self, t: datetime, command_id: str, device: str, name: str, data: dict) -> None:
@@ -153,6 +167,21 @@ class Store:
         return [{"id": i, "t": datetime.fromisoformat(t), "device": dev, "name": n, "data": json.loads(d),
                  "ack_t": datetime.fromisoformat(at) if at else None, "ok": None if ok is None else bool(ok), "error": err}
                 for i, t, dev, n, d, at, ok, err in rows]
+
+    # -- commissioning: every bench test, calibration and acceptance run, newest wins
+    def commission(self, t: datetime, scope: str, subject: str, step: str, ok: bool, by: str | None, data: dict) -> None:
+        self._db.execute("INSERT INTO commissioning (t, scope, subject, step, ok, by, data) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                         (t.isoformat(), scope, subject, step, int(ok), by, json.dumps(data)))
+        self._db.commit()
+
+    def commissioning(self, history: bool = False) -> list[dict]:
+        """The latest record per (scope, subject, step); with history, every record in order."""
+        rows = self._db.execute("SELECT t, scope, subject, step, ok, by, data FROM commissioning ORDER BY id")
+        records = [{"t": datetime.fromisoformat(t), "scope": sc, "subject": su, "step": st, "ok": bool(ok), "by": by,
+                    "data": json.loads(d)} for t, sc, su, st, ok, by, d in rows]
+        if history:
+            return records
+        return list({(r["scope"], r["subject"], r["step"]): r for r in records}.values())
 
     # -- planting progress
     def load_planting(self, planting_id: str) -> dict | None:
@@ -204,6 +233,14 @@ class Store:
         """Readings before this are in the rollups; later ones are only in the raw table."""
         done = self.get_setting("rollup_until")
         return datetime.fromisoformat(done) if done else None
+
+    def snapshot(self, target: str) -> None:
+        """Write a consistent copy of the whole database to a new file."""
+        copy = sqlite3.connect(target)
+        try:
+            self._db.backup(copy)
+        finally:
+            copy.close()
 
     def counts(self) -> dict[str, int]:
         return {table: self._db.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0]

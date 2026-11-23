@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import copy
 from typing import Any
+from .durations import seconds
 
 STAGE_KEYS = ("targets", "control", "alerts")
 
@@ -79,3 +80,26 @@ def resolve_recipe(recipe: dict, species: dict | None = None, goal: dict | None 
         stage.setdefault("control", [])
         stage.setdefault("alerts", [])
     return {"id": recipe["id"], "mode": recipe["mode"], "stages": stages, "layers": layers}
+
+
+DURATION_KEYS = {"for", "min_interval", "max_on", "min_off", "on_for", "every", "typical", "min", "max"}
+
+
+def scale_stage(stage: dict, speed: float) -> dict:
+    """A copy of a resolved stage with every duration divided by `speed`, for acceptance runs.
+
+    Only times change: dose volumes, target bands and levels stay as they are. The stage no
+    longer advances, and schedules by time of day (on_at/hours) are left alone.
+    """
+    def walk(node, key=None):
+        if isinstance(node, dict):
+            return {k: walk(v, k) for k, v in node.items() if k != "advance"}
+        if isinstance(node, list):
+            return [walk(item) for item in node]
+        if key in DURATION_KEYS and isinstance(node, str):
+            return f"{seconds(node) / speed:g}s"
+        return node
+
+    scaled = walk(stage)
+    scaled["targets"] = stage["targets"]        # min/max here are band limits, not durations
+    return scaled

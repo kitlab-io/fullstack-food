@@ -47,10 +47,13 @@ class ConfigError(Exception):
 
 
 def find_repo_root(start: Path | None = None) -> Path:
-    here = (start or Path(__file__)).resolve()
-    for parent in [here, *here.parents]:
-        if (parent / "schemas").is_dir() and (parent / "catalog").is_dir():
-            return parent
+    """The directory holding schemas/ and catalog/: above `start`, else above the working
+    directory (an installed package), else above this file (a source checkout)."""
+    for origin in ([start] if start else [Path.cwd(), Path(__file__)]):
+        here = origin.resolve()
+        for parent in [here, *here.parents]:
+            if (parent / "schemas").is_dir() and (parent / "catalog").is_dir():
+                return parent
     raise FileNotFoundError("could not find a directory containing schemas/ and catalog/")
 
 

@@ -8,12 +8,13 @@ small indoor growing setups (house plants, microgreens, mushrooms) on a local ne
 Mid-restructure. `docs/plan/restructure-plan.md` is the roadmap. Done so far: phase 0
 (hygiene), phase 1 (schemas and catalog), phase 2 (hub, simulator, scenario tests) and
 the status/LED engine from phase 3. Two follow-on plans are under way:
-`docs/plan/dashboard-plan.md` D1 (hub groundwork) and D2 (read-only dashboard), and
-`docs/plan/installation-plan.md` I1 (assembly and test data per part, pin validation) and the
-software half of I2 (ESPHome config generation, node contract suite). Nothing has run on real
-hardware yet: no pin, wiring or power value in the catalog has been confirmed on a bench
-(`datasheet_checked: false`), and the generated firmware passes `esphome config` but has
-never been compiled or flashed.
+`docs/plan/dashboard-plan.md` D1 to D3 (hub groundwork, read-only dashboard, log and raw
+data), and `docs/plan/installation-plan.md` I1 (assembly and test data per part, pin
+validation) and the software halves of I2 (ESPHome config generation, node contract suite)
+and I3 (observe mode, commissioning records, bench, calibration and zone acceptance tools).
+Nothing has run on real hardware yet: no pin, wiring or power value in the catalog has been
+confirmed on a bench (`datasheet_checked: false`), and the generated firmware compiles with
+ESPHome but has never been flashed.
 
 ## Layout
 
@@ -29,10 +30,12 @@ never been compiled or flashed.
 | `packages/hub/fsf_hub` | Control loops, safety limits, operator commands, zone status, LED rendering, SQLite store with retention |
 | `packages/core/fsf_core/firmware` | ESPHome config generation from a site file; `fsf_node.h` is the C++ shared by every node |
 | `packages/core/fsf_core/nodetest.py` | Node contract suite, run against simulated or real nodes |
+| `packages/hub/fsf_hub/commissioning.py` | Bench test, calibration and zone acceptance, driven over MQTT and recorded by the hub |
 | `packages/sim/fsf_sim` | Simulated nodes, zone physics, fault injection, `MockSystem` test harness |
 | `packages/web/fsf_web` | Dashboard service: read-only FastAPI over the hub database and live MQTT state |
 | `packages/web/frontend` | Dashboard frontend (Vue 3, Vite, uPlot), built to `dist/` and served by `fsf_web` |
 | `tests/unit`, `tests/contract`, `tests/system`, `tests/web` | Core logic, MQTT and node contract, scenario tests, dashboard API |
+| `tests/hil` | The node contract suite against a real bench rig; skipped unless `FSF_HIL_SITE` and `FSF_HIL_MQTT_HOST` are set |
 | `deploy/` | Dockerfile and compose files: broker, hub, dashboard, and the simulator for the mock stack |
 | `iot-manager/`, `copilot/`, `nodes/`, `electronics/`, `homeassistant/` | Legacy prototype, kept for reference until later phases replace it. Do not extend it. |
 
@@ -41,7 +44,7 @@ never been compiled or flashed.
 ```
 just validate          # catalog + example sites against the schemas
 just validate --pins   # also propose board pins for devices that have none assigned
-just test              # all tests, about two minutes
+just test              # all tests, about three minutes
 just firmware sites/examples/houseplants --include-sim    # ESPHome configs into build/firmware/
 just node-test shelf-node --site <site> --actuate         # contract suite against a real broker
 just web-build         # build the dashboard frontend (needs Node.js)
@@ -74,6 +77,15 @@ without FastAPI, and the ESPHome validation test without the `esphome` command.
   change of decision, not per tick), every device command with its ack, and events with a
   level. Raw readings, trace and commands age out (`retention` in the site file); 5-minute and
   hourly rollups and events are kept. A retained `hub/state` carries plantings and actuators.
+- A zone in observe mode computes and logs every decision but sends nothing to its
+  actuators. An operator can set it (`set_zone_mode`), and a zone with a real (non-simulated)
+  actuator that has not passed a bench test is in it automatically. Dose and limit events
+  from an observing zone carry `observed: true`. `actuator_test` still works there.
+- Commissioning goes bench (`fsf bench`), calibration (`fsf calibrate`), `fsf node test`,
+  observe, `fsf zone test`, then `fsf zone mode <zone> active`. The tools record results with
+  the hub's `commission` command; they never write the database or the site file.
+- A node may send anything: the hub ignores a payload that is not a JSON object and logs
+  `bad_payload` once per topic.
 - The dashboard never writes: it opens the hub's SQLite file read-only and subscribes to
   MQTT. Actions (dashboard plan D4) must go through hub commands, not the database.
 - Firmware is generated, never hand-edited: device blocks come from the ESPHome driver

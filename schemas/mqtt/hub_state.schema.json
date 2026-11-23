@@ -138,6 +138,54 @@
           "additionalProperties": false
         }
       }
+    },
+    "observing": {
+      "type": "object",
+      "description": "zone -> why it is in observe mode",
+      "additionalProperties": {
+        "type": "string"
+      }
+    },
+    "commissioning": {
+      "type": "array",
+      "description": "Latest record per scope, subject and step",
+      "items": {
+        "type": "object",
+        "properties": {
+          "t": {
+            "type": "string"
+          },
+          "scope": {
+            "type": "string"
+          },
+          "subject": {
+            "type": "string"
+          },
+          "step": {
+            "type": "string"
+          },
+          "ok": {
+            "type": "boolean"
+          },
+          "by": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "data": {
+            "type": "object"
+          }
+        },
+        "required": [
+          "t",
+          "scope",
+          "subject",
+          "step",
+          "ok"
+        ],
+        "additionalProperties": false
+      }
     }
   },
   "required": [
@@ -148,7 +196,9 @@
     "plantings",
     "actuators",
     "paused",
-    "overrides"
+    "overrides",
+    "observing",
+    "commissioning"
   ],
   "additionalProperties": false
 }

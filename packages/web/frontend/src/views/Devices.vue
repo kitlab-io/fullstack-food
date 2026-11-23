@@ -72,6 +72,10 @@ function now(device) {
           </span>
           <span class="muted small block">{{ DRIVER[device.driver_status] ?? `no ${node.runtime} driver` }}</span>
           <span v-if="device.datasheet_checked === false" class="muted small block">wiring data not yet checked against the datasheet</span>
+          <span v-for="(record, step) in device.commissioning" :key="step" class="pill" :class="record.ok ? 'good' : 'bad'"
+                :title="`${clock(record.t, site?.timezone, true)} by ${record.by ?? 'unknown'}`">
+            {{ sentence(step) }} {{ record.ok ? 'passed' : 'failed' }}
+          </span>
         </span>
       </div>
     </div>

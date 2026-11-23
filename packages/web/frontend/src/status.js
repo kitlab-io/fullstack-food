@@ -27,6 +27,7 @@ export const NEEDS_PERSON = {
   sensor_stale: 'A sensor has stopped reporting: loops that depend on it are held off.',
   critical: 'A reading is far outside what this planting tolerates.',
   paused: 'Paused: everything is off until the zone is resumed.',
+  observing: 'Observe mode: decisions are logged but nothing is switched.',
 }
 
 // 24x24 stroke icons. Colour is never the only signal: every status has its own shape.
@@ -46,12 +47,13 @@ const ICONS = {
   offline: 'M4 4l16 16M2.500 9.500a14 14 0 0 1 4.600-3M9.500 6.200A14 14 0 0 1 21.500 9.500M6 13a9 9 0 0 1 3.500-2.300M14.800 11a9 9 0 0 1 3.200 2M9.500 16.500a4 4 0 0 1 5 0M12 20v.300',
   pause: 'M8.500 5v14M15.500 5v14',
   empty: 'M12 4a8 8 0 1 0 0 16a8 8 0 0 0 0-16z',
+  eye: 'M2.500 12s3.500-6.500 9.500-6.500S21.500 12 21.500 12s-3.500 6.500-9.500 6.500S2.500 12 2.500 12zM12 9.500a2.500 2.500 0 1 0 0 5a2.500 2.500 0 0 0 0-5z',
   question: 'M9.200 9a2.900 2.900 0 1 1 4.300 2.500c-.900.500-1.500 1.100-1.500 2.300M12 17.200v.300',
 }
 const STATUS_ICON = {
   ok: 'check', idle: 'empty', unknown: 'question', needs_water: 'drop', too_wet: 'drops',
   reservoir_low: 'bucket', too_cold: 'cold', too_hot: 'hot', too_dry: 'sun', too_humid: 'cloud',
   stale_air: 'wind', stage_ready: 'flag', critical: 'alert', sensor_stale: 'silent',
-  offline: 'offline', paused: 'pause',
+  offline: 'offline', paused: 'pause', observing: 'eye',
 }
 export const iconPath = (status) => ICONS[STATUS_ICON[status] ?? 'alert']

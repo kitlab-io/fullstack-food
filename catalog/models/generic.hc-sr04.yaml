@@ -13,10 +13,15 @@ drivers:
           trigger_pin: ${pin.trigger}
           echo_pin: ${pin.echo}
           update_interval: 30s
-          id: ${id}_water_level
+          id: ${id}_raw
           internal: true
           filters:
             - multiply: 100.0
+        - platform: copy
+          source_id: ${id}_raw
+          id: ${id}_water_level
+          internal: true
+          filters:
             - calibrate_linear:
                 - ${cal.empty_cm} -> 0.0
                 - ${cal.full_cm} -> 100.0

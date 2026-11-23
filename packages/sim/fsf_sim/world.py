@@ -290,6 +290,14 @@ class Sim:
                 values["water_level"] = 100.0 * r["volume_ml"] / r["capacity_ml"]
         return values
 
+    def _raw(self, dev: Device, payload: dict) -> float | None:
+        """What the part itself measures (volts, centimetres), from the site's calibration, as real firmware reports it."""
+        cal = dev.raw.get("calibration", {})
+        for quantity, low, high in (("soil_moisture", "dry_v", "wet_v"), ("water_level", "empty_cm", "full_cm")):
+            if quantity in payload and low in cal and high in cal:
+                return round(cal[low] + (cal[high] - cal[low]) * payload[quantity] / 100.0, 3)
+        return None
+
     def _report(self, now: datetime) -> None:
         self._last_report = now
         for dev in self.site.devices.values():
@@ -301,5 +309,8 @@ class Sim:
                 if quantity not in ("air_temperature", "soil_temperature"):
                     noisy = max(0.0, noisy)
                 payload[quantity] = round(self.stuck.get((dev.id, quantity), noisy), 2)
+            raw = self._raw(dev, payload)
+            if raw is not None:
+                payload["raw"] = raw
             if len(payload) > 1:
                 self.bus.publish(topics.device(self.site.id, dev.node, dev.id, "state"), payload, retain=True)
