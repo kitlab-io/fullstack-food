@@ -143,6 +143,14 @@ class Sim:
     def set_reservoir(self, device_id: str, volume_ml: float) -> None:
         self.reservoirs[device_id]["volume_ml"] = volume_ml
 
+    def set_zone(self, zone_id: str, **values: float) -> None:
+        """Put a zone's air or soil where a scenario needs it: a pot that has dried out, a chamber left open."""
+        zone = self.zones[zone_id]
+        for quantity, value in values.items():
+            if quantity not in ("air_temperature", "relative_humidity", "co2", "soil_moisture"):
+                raise ValueError(f"cannot set {quantity!r} of a zone")
+            setattr(zone, quantity, float(value))
+
     def set_ambient(self, air_temperature: float | None = None, relative_humidity: float | None = None) -> None:
         if air_temperature is not None:
             self.ambient["air_temperature"] = {**self.ambient["air_temperature"], "mean": air_temperature}

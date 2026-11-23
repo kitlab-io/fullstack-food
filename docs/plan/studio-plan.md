@@ -1,7 +1,7 @@
 # Studio plan: designing, simulating and managing sites
 
-Status (2026-11-23): the recommended options in section 12 are accepted. Phase S1 is built;
-S2 to S6 are not started. It builds on the hub, simulator, dashboard and tools described in
+Status (2026-11-23): the recommended options in section 12 are accepted. Phases S1 and S2 are
+built; S3 to S6 are not started. It builds on the hub, simulator, dashboard and tools described in
 `AGENTS.md`, and it reverses one non-goal of the dashboard plan: editing site and recipe
 files in the browser.
 
@@ -29,6 +29,34 @@ How S1 stands:
   mock stack's no-login mode counts as admin.
 - Not in S1: limits are not yet editable anywhere but the files, there is no editor, and
   the dashboard does not show the envelope next to a band.
+
+How S2 stands:
+
+- **Scenario files** (`schemas/scenario.schema.json`) live in `<site>/scenarios/`, so the
+  site is the folder and is not named in the file. `environment:` is laid over the site's
+  `sim.yaml`: a scenario states only what it needs different.
+- **The runner** (`packages/sim/fsf_sim/scenario.py`, `fsf scenario run <file or site>`).
+  It sits with the simulator, not in `fsf_studio`, because it needs nothing else. `do:`
+  entries act on the simulated world (the existing fault injections, plus `set_zone`,
+  `stop_hub` and `start_hub`); `command:` entries go to the hub over the bus as an
+  operator's would, and a refusal fails the run unless the entry says `refused: true`. At
+  each moment the expectations are checked before the timeline is applied.
+- **Expectations** are `at` a moment, `by` a moment, or over a window (`from`, `to`), of a
+  zone (status, active statuses, stage, LED, the simulated air and soil), an actuator
+  (`is_on`, total and longest on time, water delivered, level, on between two times of
+  day), a strip, a planting, or the hub's events (count, fields, least gap, rolling sum,
+  when they happened). A failed one says what was seen instead. `is_on`, not `on`: YAML
+  reads the key `on` as true.
+- **A scenario file is a test.** `pytest` runs every file under `sites/examples/*/scenarios`
+  (22 of them), and `fsf validate` checks them with their site. 20 Python scenario tests
+  that the files carry over in full were removed; those that reach into the hub (restart
+  with a changed site, unacknowledged commands in the store, a decision's reason) or wait
+  for a condition instead of a time stay in Python.
+- **The result view is the dashboard.** `fsf scenario run <file> --serve` shows the
+  finished run in the usual pages, read-only, with a Scenario page (timeline, each
+  expectation and what was seen) and the timeline marked on the zone charts.
+- Not in S2: a scenario cannot run against a revision or a draft (S3), nothing limits a
+  run on a small hub (S4), and revisions do not include scenario files.
 
 Statements about Tauri and Electron below are from general knowledge of both, not from a
 trial. Build a throwaway shell with each before committing (decision 1).
@@ -151,22 +179,24 @@ A scenario file replaces what a Python scenario test says today:
 ```yaml
 kind: Scenario
 id: heater-fails-overnight
-site: mushrooms                 # a site id, or a revision of one
-environment:                    # what sim.yaml holds today
-  ambient: { air_temperature: { mean: 14, daily_amplitude: 1.5 }, relative_humidity: 50 }
-  zones: { incubation-chamber: { enclosure: chamber, air: { heater_degc_per_h: 10 } } }
+# in sites/examples/mushrooms/scenarios/: the folder says which site
+environment:                    # laid over the site's sim.yaml
+  ambient: { air_temperature: { mean: 12 } }
 start: "2026-03-01T08:00:00Z"
 duration: 2d
 timeline:
   - { at: 6h,  do: actuator_weak, device: inc-heater, fraction: 0 }
   - { at: 30h, do: actuator_weak, device: inc-heater, fraction: null }
-  - { at: 36h, command: advance_stage, planting: oyster-1 }
+  - { at: 36h, command: pause_zone, zone: incubation-chamber, duration: 1h }
 expect:
   - { by: 9h,  zone: incubation-chamber, status: no_effect }
   - { at: 2d,  zone: incubation-chamber, status_not: no_effect }
-  - { over: all, device: inc-heater, max_continuous_on: 30m }
-  - { over: all, no_event: command_failed }
+  - { device: inc-heater, max_continuous_on: 30m }      # no time given: the whole run
+  - { no_event: command_failed }
 ```
+
+(As built in S2; the first draft of this plan named the site in the file and wrote
+`over: all`.)
 
 - `do:` entries are the simulator's existing fault injections; `command:` entries are hub
   commands. Nothing new can be expressed that the system cannot already do.

@@ -1,0 +1,12 @@
+kind: Scenario
+id: watering-is-not-a-leak
+title: Watering itself is not taken for a leak
+duration: 8h
+environment:
+  reservoirs:
+    reservoir-level: { capacity_ml: 1000, volume_ml: 1000 }     # small enough for one dose to show
+timeline:
+  - { at: 0, do: set_zone, zone: pothos-window, soil_moisture: 20 }
+expect:
+  - { event: dose, count: { min: 1 } }
+  - { no_event: detection, where: { status: water_mismatch } }

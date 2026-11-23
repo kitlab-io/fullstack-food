@@ -1,0 +1,11 @@
+kind: Scenario
+id: hub-dies
+title: Actuators switch off by themselves when the hub dies
+description: The hub stops while the heat mat is on. The lease is three minutes; the node ends it without being told.
+duration: 1h14m
+timeline:
+  - { at: 10m, do: stop_hub }
+expect:
+  - { at: 10m, device: inc-heater, is_on: true }
+  - { at: 14m, device: inc-heater, is_on: false }
+  - { from: 14m, device: inc-heater, on_time: { max: 0s } }

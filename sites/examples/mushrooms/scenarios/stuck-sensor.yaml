@@ -1,0 +1,15 @@
+kind: Scenario
+id: stuck-sensor
+title: A sensor frozen at a believable value is noticed
+duration: 15h5m
+timeline:
+  - { at: 2h, do: sensor_stuck, device: inc-air, quantity: air_temperature, value: 23.4 }
+  - { at: 15h, do: sensor_stuck, device: inc-air, quantity: air_temperature, value: null, note: Reseated or replaced }
+expect:
+  - { at: 13h, zone: incubation-chamber, active_not: sensor_fault }
+  - { at: 15h, zone: incubation-chamber, status: sensor_fault }
+  - at: 15h
+    event: detection
+    where: { subject: inc-air/air_temperature/stuck }
+    contains: { detail: without any change for 12 h }
+  - { at: 15h5m, zone: incubation-chamber, active_not: sensor_fault }

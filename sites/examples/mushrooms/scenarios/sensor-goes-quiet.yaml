@@ -1,0 +1,18 @@
+kind: Scenario
+id: sensor-goes-quiet
+title: The heater shuts off when its temperature sensor goes quiet
+duration: 8h15m
+timeline:
+  - { at: 3h, do: sensor_dropout, device: inc-air, note: Broken wire or crashed driver }
+  - { at: 6h15m, do: sensor_dropout, device: inc-air, active: false }
+expect:
+  - { at: 3h, zone: incubation-chamber, status: ok }
+  # stale after 10 minutes
+  - { at: 3h15m, zone: incubation-chamber, status: sensor_stale }
+  - { at: 3h15m, device: inc-heater, is_on: false }
+  - { at: 3h15m, zone: incubation-chamber, led: { effect: blink } }
+  # it never heats blind, and the chamber cools, which the status reports
+  - { from: 3h15m, to: 6h15m, device: inc-heater, on_time: { max: 0s } }
+  - { at: 6h15m, zone: incubation-chamber, air_temperature: { max: 18 } }
+  - { at: 8h15m, zone: incubation-chamber, status: ok }
+  - { at: 8h15m, zone: incubation-chamber, air_temperature: { min: 21 } }

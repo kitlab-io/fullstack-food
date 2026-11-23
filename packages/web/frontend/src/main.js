@@ -7,6 +7,7 @@ import Help from './views/Help.vue'
 import Log from './views/Log.vue'
 import Overview from './views/Overview.vue'
 import Raw from './views/Raw.vue'
+import Scenario from './views/Scenario.vue'
 import Simulator from './views/Simulator.vue'
 import ZoneDetail from './views/ZoneDetail.vue'
 import 'uplot/dist/uPlot.min.css'
@@ -21,6 +22,7 @@ const router = createRouter({
     { path: '/log', component: Log },
     { path: '/raw', component: Raw },
     { path: '/simulator', component: Simulator },
+    { path: '/scenario', component: Scenario },
     { path: '/help', component: Help },
     { path: '/help/:status', component: Help, props: true },
   ],

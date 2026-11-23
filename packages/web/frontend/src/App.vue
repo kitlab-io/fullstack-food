@@ -1,7 +1,7 @@
 <script setup>
 import { onMounted, ref, watch } from 'vue'
 
-import { connection, loadSession, loadSite, logout, session, simulated, site } from './api.js'
+import { connection, loadSession, loadSite, logout, scenario, session, simulated, site } from './api.js'
 import Login from './views/Login.vue'
 
 const error = ref(null)
@@ -38,16 +38,20 @@ async function leave() {
         <RouterLink to="/log">Log</RouterLink>
         <RouterLink to="/raw">Raw data</RouterLink>
         <RouterLink to="/help">Help</RouterLink>
-        <RouterLink v-if="simulated" to="/simulator">Simulator</RouterLink>
+        <RouterLink v-if="scenario" to="/scenario">Scenario</RouterLink>
+        <RouterLink v-else-if="simulated" to="/simulator">Simulator</RouterLink>
       </nav>
-      <span v-if="session?.can_read" class="link" :class="{ down: !connection.live }" role="status">
+      <RouterLink v-if="scenario" to="/scenario" class="pill" :class="{ bad: !scenario.passed }">
+        Finished run: {{ scenario.passed ? 'passed' : 'failed' }}
+      </RouterLink>
+      <span v-else-if="session?.can_read" class="link" :class="{ down: !connection.live }" role="status">
         <span class="dot" aria-hidden="true"></span>{{ connection.live ? 'Live' : 'Reconnecting' }}
       </span>
       <span v-if="session?.authenticated" class="who">
         {{ session.name }} <span class="pill">{{ session.role }}</span>
         <button type="button" class="plain small" @click="leave">Log out</button>
       </span>
-      <button v-else-if="session?.login_required && session.can_read" type="button" class="plain small" @click="wantsLogin = true">
+      <button v-else-if="session?.login_required && session.can_read && !scenario" type="button" class="plain small" @click="wantsLogin = true">
         Log in to act
       </button>
     </div>

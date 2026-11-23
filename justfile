@@ -16,6 +16,10 @@ validate *sites:
 test *args:
     uv run pytest {{args}}
 
+# Run scenario files or all scenarios of a site: just scenario sites/examples/mushrooms --serve
+scenario *args:
+    uv run fsf scenario run {{args}}
+
 # Run a simulated site against a real MQTT broker: just mock mushrooms 600
 mock site="houseplants" speed="120":
     FSF_SITE={{site}} FSF_SPEED={{speed}} {{compose}} up --build

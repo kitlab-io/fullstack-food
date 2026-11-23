@@ -1,0 +1,13 @@
+kind: Scenario
+id: daily-water-cap
+title: The daily water cap is never exceeded
+description: A fan heater pointed at the tray, say. The cap holds and the shortfall is visible.
+duration: 3d
+environment:
+  zones:
+    tray1:
+      soil: { evaporation_pct_per_h: 12.0 }
+expect:
+  - { event: dose, zone: tray1, count: { min: 12 }, min_gap: 2h }
+  - { event: dose, zone: tray1, rolling: { field: volume_ml, window: 24h, max: 400 } }
+  - { at: 3d, zone: tray1, status: needs_water }

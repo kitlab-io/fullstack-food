@@ -1,0 +1,15 @@
+kind: Scenario
+id: cold-room
+title: A cold room raises a critical alert
+description: A window left open in winter. The pothos has a critical alert below 10 degC; the snake plant only leaves its band.
+duration: 45m
+timeline:
+  - { at: 0, do: set_ambient, air_temperature: 7 }
+  - { at: 15m, do: set_ambient, air_temperature: 21 }
+expect:
+  - { at: 15m, zone: pothos-window, status: critical }
+  - { at: 15m, zone: pothos-window, led: { effect: blink } }
+  - { at: 15m, zone: snake-shelf, status: too_cold }
+  - { at: 15m, zone: snake-shelf, led: { color: [0, 180, 255, 0] } }
+  - { at: 45m, zone: pothos-window, status: ok }
+  - { at: 45m, zone: snake-shelf, status: ok }

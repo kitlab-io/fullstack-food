@@ -1,0 +1,135 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Scenario",
+  "description": "A simulated run of one site: what happens when, and what must then be true. Lives in <site>/scenarios/. Times are durations from the start of the run (30m, 6h, 2d) and must fall on a tick.",
+  "type": "object",
+  "required": ["kind", "id", "duration", "expect"],
+  "additionalProperties": false,
+  "$defs": {
+    "id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9._-]*$" },
+    "time": { "type": ["string", "number"], "pattern": "^([0-9.]+[smhd])+$", "minimum": 0 },
+    "range": {
+      "type": "object",
+      "additionalProperties": false,
+      "minProperties": 1,
+      "properties": {
+        "min": { "type": "number" },
+        "max": { "type": "number" },
+        "share": { "type": "number", "exclusiveMinimum": 0, "maximum": 1, "description": "Over a time window: the share of ticks that must be inside the range (default: all of them)" }
+      }
+    },
+    "time_range": {
+      "type": "object",
+      "additionalProperties": false,
+      "minProperties": 1,
+      "properties": { "min": { "$ref": "#/$defs/time" }, "max": { "$ref": "#/$defs/time" } }
+    },
+    "names": { "oneOf": [{ "type": "string" }, { "type": "array", "items": { "type": "string" }, "minItems": 1 }] },
+    "count": {
+      "oneOf": [
+        { "type": "integer", "minimum": 0 },
+        { "type": "object", "additionalProperties": false, "minProperties": 1,
+          "properties": { "min": { "type": "integer", "minimum": 0 }, "max": { "type": "integer", "minimum": 0 } } }
+      ]
+    }
+  },
+  "properties": {
+    "kind": { "const": "Scenario" },
+    "id": { "$ref": "#/$defs/id" },
+    "title": { "type": "string" },
+    "description": { "type": "string" },
+    "site": { "$ref": "#/$defs/id", "description": "Optional. Must be the id of the site whose folder holds this file" },
+    "start": { "type": "string", "format": "date-time", "description": "Simulated start time (default 2026-03-01T08:00:00Z)" },
+    "duration": { "$ref": "#/$defs/time" },
+    "tick": { "type": "number", "minimum": 1, "maximum": 600, "description": "Simulated seconds per step (default 30)" },
+    "environment": {
+      "type": "object",
+      "description": "Laid over the site's sim.yaml: only what this scenario needs different (ambient, reservoirs, zones, seed)"
+    },
+    "timeline": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["at"],
+        "oneOf": [{ "required": ["do"] }, { "required": ["command"] }],
+        "properties": {
+          "at": { "$ref": "#/$defs/time" },
+          "do": {
+            "description": "Something done to the simulated world",
+            "enum": ["sensor_dropout", "sensor_stuck", "node_offline", "pump_no_flow", "actuator_ignores", "actuator_weak",
+                     "set_reservoir", "set_ambient", "set_zone", "clear_faults", "stop_hub", "start_hub"]
+          },
+          "command": { "type": "string", "description": "A hub command, sent as an operator would send it. Its other fields are the command's arguments" },
+          "refused": { "type": "boolean", "description": "With command: the hub is expected to refuse it" },
+          "result": { "type": "object", "description": "With command: fields the hub's result must have" },
+          "note": { "type": "string" }
+        }
+      }
+    },
+    "expect": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "One thing that must be true. When: `at` a moment, `by` a moment (at some tick up to it), or during a window (`from`, `to`; default the whole run). What: one check of a zone, device, strip, planting or of the hub's events.",
+        "properties": {
+          "at": { "$ref": "#/$defs/time" },
+          "by": { "$ref": "#/$defs/time" },
+          "from": { "$ref": "#/$defs/time" },
+          "to": { "$ref": "#/$defs/time" },
+          "note": { "type": "string" },
+
+          "zone": { "$ref": "#/$defs/id" },
+          "status": { "type": "string", "description": "The zone's status, as on its LED segment" },
+          "status_not": { "type": "string" },
+          "active": { "$ref": "#/$defs/names", "description": "Statuses that are all active in the zone, whichever is shown" },
+          "active_not": { "$ref": "#/$defs/names" },
+          "active_is": { "$ref": "#/$defs/names", "description": "Exactly these statuses are active, no others" },
+          "led": {
+            "type": "object", "additionalProperties": false, "minProperties": 1,
+            "properties": { "status": { "type": "string" }, "effect": { "type": "string" },
+                            "color": { "type": "array", "items": { "type": "integer" } } }
+          },
+          "led_sequence": { "type": "array", "items": { "type": "string" }, "description": "Every status the zone's segment has shown up to then, in order, without repeats" },
+          "air_temperature": { "$ref": "#/$defs/range", "description": "The simulated truth in the zone, not what a sensor reported" },
+          "relative_humidity": { "$ref": "#/$defs/range" },
+          "co2": { "$ref": "#/$defs/range" },
+          "soil_moisture": { "$ref": "#/$defs/range" },
+
+          "device": { "$ref": "#/$defs/id" },
+          "is_on": { "type": "boolean", "description": "Not `on`: YAML reads that key as true" },
+          "on_between": {
+            "type": "array", "minItems": 2, "maxItems": 2, "items": { "type": "string", "pattern": "^[0-2][0-9]:[0-5][0-9]$" },
+            "description": "Over a window: on at every tick inside these local times and off outside them"
+          },
+          "max_continuous_on": { "$ref": "#/$defs/time" },
+          "on_time": { "$ref": "#/$defs/time_range", "description": "Total time the actuator was on in the window" },
+          "delivered_ml": { "$ref": "#/$defs/range", "description": "Water a pump really moved: in total at a moment, or within a window" },
+          "level": { "type": "number" },
+
+          "strip": { "$ref": "#/$defs/id" },
+          "brightness": { "type": "number" },
+
+          "planting": { "$ref": "#/$defs/id" },
+          "stage": { "type": ["string", "null"], "description": "With planting: its stage (null when finished). With zone: the stage the zone is running" },
+          "in_zone": { "$ref": "#/$defs/id" },
+
+          "event": { "type": "string", "description": "Hub events of this kind, up to a moment or within a window" },
+          "no_event": { "type": "string", "description": "Short for event with count 0" },
+          "where": { "type": "object", "description": "Only events whose fields have these values" },
+          "contains": { "type": "object", "additionalProperties": { "type": "string" }, "description": "Only events whose text fields contain these strings" },
+          "count": { "$ref": "#/$defs/count" },
+          "min_gap": { "$ref": "#/$defs/time", "description": "The least time between two such events" },
+          "rolling": {
+            "type": "object", "required": ["field", "window", "max"], "additionalProperties": false,
+            "properties": { "field": { "type": "string" }, "window": { "$ref": "#/$defs/time" }, "max": { "type": "number" } },
+            "description": "The sum of a field over any window of this length never exceeds max"
+          },
+          "values": { "type": "object", "additionalProperties": { "type": "array" }, "description": "field -> the values of that field over the events, in order" },
+          "offsets": { "type": "array", "items": { "$ref": "#/$defs/time" }, "description": "When the events happened, from the start of the run" }
+        }
+      }
+    }
+  }
+}

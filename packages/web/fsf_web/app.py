@@ -139,10 +139,12 @@ def on_intervals(commands: list[dict]) -> list[list[float]]:
 
 
 def create_app(site: Site, catalog: Catalog, db_path: str, live: Live, static_dir: Path | None = None,
-               developer: bool = False, auth: Auth | None = None, site_dir: Path | None = None) -> FastAPI:
+               developer: bool = False, auth: Auth | None = None, site_dir: Path | None = None,
+               scenario: dict | None = None) -> FastAPI:
     """developer: also allow downloading the whole database. auth: who may read and act
     (default: nobody can log in, so the API is closed). site_dir: the site's folder, for the
-    studio's revisions."""
+    studio's revisions. scenario: the result of the scenario run this dashboard is showing,
+    when it shows a finished simulation instead of a live site."""
     base_catalog = catalog
     app = FastAPI(title="Fullstack Food", docs_url="/api/docs", openapi_url="/api/openapi.json", redoc_url=None)
     catalog = site.catalog or catalog       # includes the site's own library
@@ -329,6 +331,11 @@ def create_app(site: Site, catalog: Catalog, db_path: str, live: Live, static_di
                                "stages": [{"id": s["id"], "duration": s.get("duration"), "targets": s["targets"],
                                            "zone_role": s.get("zone_role")} for s in p.recipe["stages"]]}
                               for p in site.plantings.values()]}
+
+    @app.get("/api/scenario")
+    def get_scenario() -> dict:
+        """The scenario run being shown: its timeline and what it expected. `present` is false on a live site."""
+        return {"present": scenario is not None, **(scenario or {})}
 
     @app.get("/api/sim")
     def get_sim() -> dict:

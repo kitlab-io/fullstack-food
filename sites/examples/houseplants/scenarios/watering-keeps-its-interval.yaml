@@ -1,0 +1,15 @@
+kind: Scenario
+id: watering-keeps-its-interval
+title: Watering respects the minimum interval however thirsty the pot
+description: >
+  A pot that dries far faster than the recipe allows for. Watering cannot keep up, and the
+  strip says so instead of quietly over-watering.
+duration: 4d
+environment:
+  zones:
+    pothos-window:
+      soil: { evaporation_pct_per_h: 3.0 }
+expect:
+  - { event: dose, zone: pothos-window, count: { min: 3 }, min_gap: 24h }
+  - { event: dose, zone: pothos-window, rolling: { field: volume_ml, window: 24h, max: 300 }, note: The recipe's daily cap }
+  - { by: 4d, zone: pothos-window, led: { status: needs_water } }

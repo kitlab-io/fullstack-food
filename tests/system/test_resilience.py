@@ -3,17 +3,6 @@
 from datetime import timedelta
 
 
-def test_actuators_switch_off_by_themselves_when_the_hub_dies(mock):
-    system = mock("mushrooms")
-    assert system.run(hours=3, until=lambda: system.is_on("inc-heater"))
-    system.stop_hub()
-    system.run(minutes=4)                  # lease is 3 minutes
-    assert not system.is_on("inc-heater")
-    burned = system.sim.actuators["inc-heater"].on_seconds
-    system.run(hours=1)
-    assert system.sim.actuators["inc-heater"].on_seconds == burned
-
-
 def test_restarted_hub_resumes_the_same_stage_and_schedule(mock, tmp_path):
     system = mock("microgreens", db_path=str(tmp_path / "hub.db"))
     start = system.clock.now()

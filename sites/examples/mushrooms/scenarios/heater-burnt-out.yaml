@@ -1,0 +1,20 @@
+kind: Scenario
+id: heater-burnt-out
+title: A heater that runs without warming is noticed
+description: The element burns out but the plug still switches. Replacing the heater clears it.
+duration: 6h30m
+timeline:
+  - { at: 2h, do: actuator_weak, device: inc-heater, fraction: 0 }
+  - { at: 2h, do: set_zone, zone: incubation-chamber, air_temperature: 18 }
+  - { at: 4h30m, do: actuator_weak, device: inc-heater, fraction: null, note: The heater is replaced }
+expect:
+  - { at: 2h, zone: incubation-chamber, status: ok }
+  - { at: 3h30m, zone: incubation-chamber, active_not: no_effect, note: Too early to tell }
+  - { at: 4h30m, zone: incubation-chamber, status: no_effect }
+  - { at: 4h30m, zone: incubation-chamber, active: too_cold }
+  - at: 4h30m
+    event: detection
+    where: { subject: incubation-chamber/heat }
+    contains: { detail: inc-heater has been wanted on for 2 h }
+  - { at: 6h30m, zone: incubation-chamber, status: ok }
+  - { at: 6h30m, event: detection_cleared, where: { status: no_effect, subject: incubation-chamber/heat } }

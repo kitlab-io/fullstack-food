@@ -1,7 +1,7 @@
 <script setup>
 import { computed, ref, watch } from 'vue'
 
-import { get, site, useLive } from '../api.js'
+import { get, scenario, site, useLive } from '../api.js'
 import ActuatorTimeline from '../components/ActuatorTimeline.vue'
 import BulletBar from '../components/BulletBar.vue'
 import SeriesChart from '../components/SeriesChart.vue'
@@ -48,9 +48,13 @@ watch(() => [props.id, range.value], refresh)
 
 const tz = computed(() => site.value?.timezone)
 const bandOf = (quantity) => zone.value.readings.find((r) => r.quantity === quantity)?.band ?? null
-const marks = computed(() => zone.value.stage_history
-  .filter((e) => e.planting === zone.value.planting?.id)
-  .map((e) => ({ t: Date.parse(e.t) / 1e3, label: sentence(e.stage ?? 'start') })))
+const marks = computed(() => [
+  ...zone.value.stage_history
+    .filter((e) => e.planting === zone.value.planting?.id)
+    .map((e) => ({ t: Date.parse(e.t) / 1e3, label: sentence(e.stage ?? 'start') })),
+  // on a finished scenario run: what the scenario did, so a kink in a chart has its cause next to it
+  ...(scenario.value?.timeline ?? []).map((e) => ({ t: Date.parse(e.t) / 1e3, label: e.text.split(' ')[e.text.startsWith('command ') ? 1 : 0].replaceAll('_', ' ') })),
+])
 const others = computed(() => zone.value.active.filter((s) => s !== zone.value.status))
 const led = computed(() => zone.value.led)
 </script>

@@ -14,6 +14,7 @@
     fsf doctor --site <site>                health check of a running installation
     fsf docs troubleshooting                troubleshooting pages by status, symptom and part
     fsf docs compatibility                  which part and board has been tried with which runtime
+    fsf scenario run <file or site> ...     simulate a site against a scenario file and check what it expects
 """
 
 from __future__ import annotations
@@ -46,6 +47,7 @@ def _validate(args, root: Path, catalog: Catalog) -> int:
             print(f"site {site.id}: ok ({len(site.devices)} devices, {len(site.zones)} zones, {len(site.plantings)} plantings)")
             for warning in site.warnings:
                 print(f"  warning: {warning}")
+            failed |= _validate_scenarios(path, catalog)
             if args.pins:
                 for device_id, pins in site.pin_proposals.items():
                     print(f"  propose: {device_id}: pins: {{ {', '.join(f'{s}: {p}' for s, p in pins.items())} }}")
@@ -268,6 +270,60 @@ def _commissioning(args, root: Path, catalog: Catalog) -> int:
     return 1 if failed else 0
 
 
+def _validate_scenarios(site_path: Path, catalog: Catalog) -> bool:
+    """Check the scenario files of a site. True when one is invalid."""
+    try:
+        from fsf_sim import find_scenarios, load_scenario
+    except ImportError:         # the simulator is not installed on a hub
+        return False
+    files = find_scenarios(site_path if site_path.is_dir() else site_path.parent)
+    problems = []
+    for file in files:
+        try:
+            load_scenario(file, catalog)
+        except ConfigError as err:
+            problems += err.problems
+    if files:
+        print(f"  {len(files)} scenarios: {'INVALID' if problems else 'ok'}")
+        for problem in problems:
+            print(f"    {problem}")
+    return bool(problems)
+
+
+def _scenario(args, root: Path, catalog: Catalog) -> int:
+    from fsf_sim import find_scenarios, run_scenario
+
+    files: list[Path] = []
+    for given in map(Path, args.paths):
+        found = find_scenarios(given) if given.is_dir() else [given]
+        if not found:
+            print(f"{given}: no scenario files in {given / 'scenarios'}")
+            return 1
+        files += found
+    out = Path(args.out) if args.out else root / "build" / "scenarios" if args.serve else None
+    failed, result = 0, None
+    for file in files:
+        folder = out / file.parent.parent.name / file.stem if out else None
+        try:
+            result = run_scenario(file, catalog, out_dir=folder, keep_system=args.serve and file == files[-1])
+        except ConfigError as err:
+            failed += 1
+            print(f"scenario {file}: INVALID")
+            print("\n".join(f"  {p}" for p in err.problems))
+            continue
+        failed += not result.passed
+        print(result.report())
+        if folder:
+            print(f"  database and result.json in {folder}")
+    print(f"{len(files) - failed} of {len(files)} scenarios passed")
+    if args.serve and result is not None and result.system is not None:
+        from fsf_web.replay import serve_run
+
+        print("The simulated environment is a guess, not measured from a real site.")
+        serve_run(result, args.port, root / "packages" / "web" / "frontend" / "dist")
+    return 1 if failed else 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="fsf")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -334,6 +390,14 @@ def main(argv: list[str] | None = None) -> int:
     ztest.add_argument("--minutes", type=float, default=30.0, help="how long to run")
     broker(ztest)
     broker(sub.add_parser("commissioning", help="list what has been tested"))
+    scenario = sub.add_parser("scenario", help="simulated runs of a site with expectations").add_subparsers(dest="action", required=True)
+    srun = scenario.add_parser("run", help="run scenario files, or every scenario of a site, and check what they expect")
+    srun.add_argument("paths", nargs="+", help="scenario files, or site directories for all of their scenarios")
+    srun.add_argument("--out", help="keep each run's database and result.json under this folder")
+    srun.add_argument("--serve", action="store_true",
+                      help="afterwards show the last run in the dashboard, read-only (keeps runs in build/scenarios)")
+    srun.add_argument("--port", type=int, default=8081, help="port for --serve (default 8081)")
+
     doctor = sub.add_parser("doctor", help="health check of a running installation, with the fix for each failure")
     broker(doctor)
     doctor.add_argument("--db", help="the hub's database file, to check storage")
@@ -348,7 +412,8 @@ def main(argv: list[str] | None = None) -> int:
         print("\n".join(f"  {p}" for p in err.problems))
         return 1
     try:
-        handler = {"validate": _validate, "firmware": _firmware, "node": _node_test, "docs": _docs, "doctor": _doctor, "init": _init}.get(args.command, _commissioning)
+        handler = {"validate": _validate, "firmware": _firmware, "node": _node_test, "docs": _docs, "doctor": _doctor, "init": _init,
+                   "scenario": _scenario}.get(args.command, _commissioning)
         return handler(args, root, catalog)
     except ConfigError as err:
         print(f"site {getattr(args, 'site', '')}: INVALID")

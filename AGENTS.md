@@ -16,8 +16,9 @@ acceptance tools), I4 (generated BOM, wiring diagrams, build guide, checklist an
 legend), I5 (fault detection, troubleshooting guides, `fsf doctor`) and the software half of
 I6 (smart power strip bridge, `fsf init` with broker logins and ACLs, compose file for a
 real hub, provisioning script, compatibility matrix). `docs/plan/studio-plan.md` (editing
-sites and scenarios, managing a live site, a desktop app) has its first phase done: safety
-envelope, per-site library, round-trip YAML writing, revision store, roles.
+sites and scenarios, managing a live site, a desktop app) has two phases done: S1 (safety
+envelope, per-site library, round-trip YAML writing, revision store, roles) and S2
+(scenario files, their runner, and the dashboard over a finished run).
 Nothing has run on real hardware yet: no pin, wiring or power value in the catalog has been
 confirmed on a bench (`datasheet_checked: false`), and the generated firmware compiles with
 ESPHome but has never been flashed.
@@ -44,6 +45,9 @@ ESPHome but has never been flashed.
 | `docs/agents/` | Guides written for LLM agents, e.g. `diagnose-zone.md` |
 | `packages/hub/fsf_hub/commissioning.py` | Bench test, calibration and zone acceptance, driven over MQTT and recorded by the hub |
 | `packages/sim/fsf_sim` | Simulated nodes, zone physics, fault injection, `MockSystem` test harness |
+| `packages/sim/fsf_sim/scenario.py` | Scenarios as data: loads and checks a scenario file, runs it on a `MockSystem`, reports each expectation |
+| `sites/<...>/<site>/scenarios/` | Scenario files of a site (`kind: Scenario`): a timeline and what must then be true. Every one under `sites/examples` is run by `pytest` |
+| `packages/web/fsf_web/replay.py` | The dashboard over a finished scenario run, read-only |
 | `packages/studio/fsf_studio` | Studio: revisions of a site (saved, validated states with diff and restore). Editors and applying come later |
 | `packages/core/fsf_core/yamlio.py` | Reading YAML for editing and writing it back with comments and order kept. The hub never writes; only the studio does |
 | `sites/<...>/<site>/library/` | A site's own species, recipes, goals and themes, layered over `catalog/`. Cannot replace built-in entries or hold parts |
@@ -69,6 +73,8 @@ just doctor --site <site> --db hub.db   # health check of a running installation
 uv run fsf init my-site --from sites/examples/houseplants   # sites/local/my-site with credentials and broker ACLs
 just web-build         # build the dashboard frontend (needs Node.js)
 just lint              # ruff, same as CI
+just scenario sites/examples/mushrooms    # run every scenario file of a site; a file instead of a site runs one;
+                          # --serve shows the last run in the dashboard on http://127.0.0.1:8081
 just mock mushrooms 600   # simulated site against a real Mosquitto broker in Docker, 600x speed;
                           # dashboard on http://localhost:8080
 just mock-watch        # tail every MQTT message of the running mock stack
@@ -104,6 +110,10 @@ without FastAPI, and the ESPHome validation test without the `esphome` command.
 - Commissioning goes bench (`fsf bench`), calibration (`fsf calibrate`), `fsf node test`,
   observe, `fsf zone test`, then `fsf zone mode <zone> active`. The tools record results with
   the hub's `commission` command; they never write the database or the site file.
+- A scenario checks its expectations at each moment before it applies its timeline, so
+  "at 3h" sees the world before what the timeline does at 3h. `do:` acts on the simulated
+  world; `command:` goes through the hub like any operator command. Its environment numbers
+  are guesses, not measurements: say so wherever a result is shown.
 - Fault detection (`fsf_hub/detect.py`) adds statuses for things that are wrong although
   readings may be in band. Thresholds are `detection:` in the site file. A reading that
   cannot be real is not used for control. Every status, including these, needs an entry in
@@ -161,8 +171,14 @@ without FastAPI, and the ESPHome validation test without the `esphome` command.
   guide in `catalog/troubleshooting.yaml`. Add an icon for it in the frontend's `status.js`.
 - **Write a YAML file from code**: `fsf_core.yamlio.load` / `save`, never PyYAML's dump, so
   comments survive.
-- **Add a scenario test**: use the `mock` fixture, drive time with `system.run(...)`, inject
-  faults through `system.sim`, assert on `system.status()`, `system.led()`, `system.events()`.
+- **Add a scenario**: a file in the site's `scenarios/` folder (`schemas/scenario.schema.json`;
+  copy one from `sites/examples`). It is picked up by `pytest` and `fsf validate` without
+  further wiring. Write `is_on`, never `on`, and quote a note that contains a comma or colon.
+  Prove it can fail: change an expectation and see `fsf scenario run <file>` say what it saw.
+- **Add a scenario test in Python**: only for what a file cannot say (hub internals, waiting
+  for a condition instead of a time). Use the `mock` fixture, drive time with
+  `system.run(...)`, inject faults through `system.sim`, assert on `system.status()`,
+  `system.led()`, `system.events()`.
 - **Change control behaviour**: write the failing scenario test first; the suite is fast.
 
 ## Rules

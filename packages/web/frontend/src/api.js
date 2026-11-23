@@ -45,9 +45,11 @@ export const act = (command) => post('/commands', command)
 // ---- site description (fetched once)
 export const site = ref(null)
 export const simulated = ref(false)        // a simulator is on the bus: show its page
+export const scenario = ref(null)          // set when this dashboard shows a finished scenario run
 let sitePromise = null
 export function loadSite() {
   get('/sim').then((sim) => { simulated.value = sim.present }).catch(() => {})
+  get('/scenario').then((run) => { scenario.value = run.present ? run : null }).catch(() => {})
   sitePromise ??= get('/site').then((data) => (site.value = data)).catch((err) => { sitePromise = null; throw err })
   return sitePromise
 }

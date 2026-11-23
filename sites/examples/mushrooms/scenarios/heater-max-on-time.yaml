@@ -1,0 +1,14 @@
+kind: Scenario
+id: heater-max-on-time
+title: The heater cannot run past its maximum on time
+description: The sensor fell off the wall and always reads cold. The recipe limits the heat mat to 30 minutes at a stretch.
+duration: 6h
+timeline:
+  - { at: 0, do: sensor_stuck, device: inc-air, quantity: air_temperature, value: 15.0 }
+expect:
+  - { device: inc-heater, max_continuous_on: 30m }
+  - { device: inc-heater, on_time: { min: 30m } }
+  - { at: 6h, event: limit, where: { reason: max_on }, count: { min: 1 } }
+  # the mismatch is visible: it reads cold, and hours of heating have changed nothing
+  - { at: 6h, zone: incubation-chamber, status: no_effect }
+  - { at: 6h, zone: incubation-chamber, active: too_cold }

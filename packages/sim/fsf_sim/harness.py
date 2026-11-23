@@ -22,7 +22,9 @@ DEFAULT_START = datetime(2026, 3, 1, 8, 0, tzinfo=timezone.utc)
 
 class MockSystem:
     def __init__(self, site_dir: str | Path, db_path: str = ":memory:", start: datetime | None = None,
-                 tick: float = 30.0, record_readings: bool = False, catalog: Catalog | None = None):
+                 tick: float = 30.0, record_readings: bool = False, catalog: Catalog | None = None,
+                 sim_config: dict | None = None):
+        """sim_config: the simulated environment, instead of the site's sim.yaml."""
         root = find_repo_root()
         site_dir = Path(site_dir)
         if not site_dir.is_absolute():
@@ -30,7 +32,8 @@ class MockSystem:
         self.catalog = catalog or Catalog.load(root)
         self.site = load_site(site_dir, self.catalog)
         sim_file = site_dir / "sim.yaml"
-        sim_config = yaml.safe_load(sim_file.read_text(encoding="utf-8")) if sim_file.exists() else {}
+        if sim_config is None:
+            sim_config = yaml.safe_load(sim_file.read_text(encoding="utf-8")) if sim_file.exists() else {}
         self.tick = tick
         self.db_path = db_path
         self.record_readings = record_readings
