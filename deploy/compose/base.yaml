@@ -41,7 +41,9 @@ services:
     command: ["python", "-m", "fsf_web", "--site", "sites/examples/${FSF_SITE:-houseplants}",
               "--mqtt-host", "broker", "--db", "/data/hub.db", "--host", "0.0.0.0"]
     environment:
-      FSF_WEB_PASSWORD_HASH: ${FSF_WEB_PASSWORD_HASH:-}
+      FSF_WEB_PASSWORD_HASH: ${FSF_WEB_PASSWORD_HASH:-}                  # operator
+      FSF_WEB_VIEWER_PASSWORD_HASH: ${FSF_WEB_VIEWER_PASSWORD_HASH:-}
+      FSF_WEB_ADMIN_PASSWORD_HASH: ${FSF_WEB_ADMIN_PASSWORD_HASH:-}
       FSF_WEB_READ_WITHOUT_LOGIN: ${FSF_WEB_READ_WITHOUT_LOGIN:-0}
     volumes:
       - hub-data:/data        # the service opens the database read-only

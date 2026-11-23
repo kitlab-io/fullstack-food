@@ -14,7 +14,7 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 
 from fsf_core import topics
-from fsf_core.catalog import Catalog, Device, Planting, Site
+from fsf_core.catalog import Catalog, Device, Planting, Site, band_outside
 from fsf_core.durations import seconds
 
 from .detect import Detector, plausible
@@ -298,6 +298,9 @@ class Hub:
         ordered = [band[k] for k in ("min", "target", "max") if k in band]
         if ordered != sorted(ordered):
             raise ValueError(f"override would give an inconsistent band {band}")
+        outside = band_outside(self.site.plantings[planting_id].species.get("limits", {}).get(quantity, {}), values)
+        if outside:
+            raise ValueError(f"{quantity} {outside}")
         length = seconds(duration)
         if length <= 0:
             raise ValueError("duration must be above 0")

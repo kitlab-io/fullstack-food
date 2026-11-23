@@ -139,10 +139,13 @@ def on_intervals(commands: list[dict]) -> list[list[float]]:
 
 
 def create_app(site: Site, catalog: Catalog, db_path: str, live: Live, static_dir: Path | None = None,
-               developer: bool = False, auth: Auth | None = None) -> FastAPI:
+               developer: bool = False, auth: Auth | None = None, site_dir: Path | None = None) -> FastAPI:
     """developer: also allow downloading the whole database. auth: who may read and act
-    (default: nobody can log in, so the API is closed)."""
+    (default: nobody can log in, so the API is closed). site_dir: the site's folder, for the
+    studio's revisions."""
+    base_catalog = catalog
     app = FastAPI(title="Fullstack Food", docs_url="/api/docs", openapi_url="/api/openapi.json", redoc_url=None)
+    catalog = site.catalog or catalog       # includes the site's own library
     components = catalog.items["Component"]
     auth = auth or Auth()
     command_schema = Draft202012Validator(json.loads(
@@ -157,11 +160,28 @@ def create_app(site: Site, catalog: Catalog, db_path: str, live: Live, static_di
         request.state.session = session
         if path.startswith("/api/") and path not in OPEN_PATHS and not auth.no_login:
             reading = request.method in ("GET", "HEAD")
-            if session is None and not (reading and auth.read_without_login):
-                return JSONResponse({"detail": "login required"}, status_code=401)
+            # Reading needs a viewer, changing anything an operator, and the studio an admin.
+            needed = "admin" if path.startswith("/api/studio") else "viewer" if reading else "operator"
+            if path == "/api/logout":
+                needed = "viewer"
+            if not auth.allows(session, needed):
+                if session is None:
+                    return JSONResponse({"detail": "login required"}, status_code=401)
+                return JSONResponse({"detail": f"this needs the {needed} login; you are logged in as {session['role']}"}, status_code=403)
             if not reading and request.headers.get("x-csrf-token") != session["csrf"]:
                 return JSONResponse({"detail": "missing or wrong CSRF token"}, status_code=403)
         return await call_next(request)
+
+    @app.get("/api/studio/revisions")
+    def get_revisions() -> dict:
+        """Saved states of this site, newest last, and which one is applied. Admin only."""
+        if site_dir is None:
+            raise HTTPException(404, "this dashboard was started without the site's folder")
+        from fsf_studio import RevisionStore
+
+        store_ = RevisionStore(site_dir, base_catalog)
+        return {"applied": store_.applied(), "draft_changes": store_.changed(),
+                "revisions": [r.__dict__ for r in store_.list()]}
 
     @app.get("/api/session")
     def get_session(request: Request) -> dict:
@@ -192,7 +212,7 @@ def create_app(site: Site, catalog: Catalog, db_path: str, live: Live, static_di
         command = {k: v for k, v in body.items() if k not in ("id", "by") and v is not None}
         if command.get("name") not in ACTIONS:
             raise HTTPException(422, f"name must be one of {', '.join(ACTIONS)}")
-        command["by"] = f"dashboard:{session['name']}" if session else "dashboard"
+        command["by"] = f"dashboard:{session['name']}" if session else "dashboard"       # no session: the mock stack
         errors = [e.message for e in command_schema.iter_errors({**command, "id": "x"})]
         if errors:
             raise HTTPException(422, "; ".join(errors))

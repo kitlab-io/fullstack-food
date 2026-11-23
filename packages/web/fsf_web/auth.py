@@ -1,12 +1,18 @@
-"""One shared login for the dashboard.
+"""Shared logins for the dashboard: one password per role, not per person.
 
-The password is never stored: the service is given a salted scrypt hash, made with
+    viewer     reads the dashboard
+    operator   also acts: advance, water, pause, override, test pulse
+    admin      also changes the site itself (the studio)
+
+A password is never stored: the service is given a salted scrypt hash per role, made with
 
     python -m fsf_web hash-password
 
-and kept in the environment (FSF_WEB_PASSWORD_HASH) or a gitignored secrets file. A session
-is a random token in an HttpOnly, SameSite=Strict cookie; every state-changing request must
-also carry the session's CSRF token in a header.
+and kept in the environment (FSF_WEB_PASSWORD_HASH for the operator, and
+FSF_WEB_VIEWER_PASSWORD_HASH and FSF_WEB_ADMIN_PASSWORD_HASH) or a gitignored file. A role
+without a hash cannot be logged in to. A session is a random token in an HttpOnly,
+SameSite=Strict cookie; every state-changing request must also carry the session's CSRF
+token in a header.
 """
 
 from __future__ import annotations
@@ -23,6 +29,7 @@ SESSION_S = 12 * 3600
 MAX_FAILURES = 5
 LOCKOUT_S = 60
 N, R, P = 2 ** 14, 8, 1
+ROLES = ("viewer", "operator", "admin")     # each includes the ones before it
 
 
 def hash_password(password: str, salt: bytes | None = None) -> str:
@@ -58,8 +65,10 @@ class Auth:
     """
 
     def __init__(self, password_hash: str | None = None, read_without_login: bool = False, no_login: bool = False,
-                 clock: Callable[[], float] = time.monotonic):
-        self.password_hash = password_hash or None
+                 clock: Callable[[], float] = time.monotonic, viewer_hash: str | None = None, admin_hash: str | None = None):
+        """password_hash is the operator's."""
+        self.hashes = {role: value for role, value in (("viewer", viewer_hash), ("operator", password_hash), ("admin", admin_hash))
+                       if value}
         self.read_without_login, self.no_login, self._clock = read_without_login, no_login, clock
         self._sessions: dict[str, dict] = {}
         self._failures = 0
@@ -67,11 +76,13 @@ class Auth:
 
     def login(self, password: str, name: str | None) -> tuple[str, dict]:
         now = self._clock()
-        if self.password_hash is None:
+        if not self.hashes:
             raise LoginError("no password is configured; set FSF_WEB_PASSWORD_HASH (python -m fsf_web hash-password)")
         if now < self._locked_until:
             raise LoginError(f"too many wrong passwords; try again in {int(self._locked_until - now) + 1} s")
-        if not verify_password(password, self.password_hash):
+        # Every hash is checked every time, so the answer takes as long whichever role matches.
+        matches = [role for role in ROLES if role in self.hashes and verify_password(password, self.hashes[role])]
+        if not matches:
             self._failures += 1
             if self._failures >= MAX_FAILURES:
                 self._failures, self._locked_until = 0, now + LOCKOUT_S
@@ -79,7 +90,8 @@ class Auth:
         self._failures = 0
         token = secrets.token_urlsafe(32)
         clean = "".join(ch for ch in (name or "").strip() if ch.isprintable())[:40]
-        self._sessions[token] = {"name": clean or "someone", "csrf": secrets.token_urlsafe(24), "expires": now + SESSION_S}
+        self._sessions[token] = {"name": clean or "someone", "csrf": secrets.token_urlsafe(24), "expires": now + SESSION_S,
+                                 "role": matches[-1]}
         return token, self._sessions[token]
 
     def session(self, token: str | None) -> dict | None:
@@ -92,10 +104,22 @@ class Auth:
     def logout(self, token: str | None) -> None:
         self._sessions.pop(token or "", None)
 
+    def role(self, session: dict | None) -> str | None:
+        """The visitor's role. Without any login configured to be needed, everyone is an admin (the mock stack)."""
+        if self.no_login:
+            return "admin"
+        if session is not None:
+            return session["role"]
+        return "viewer" if self.read_without_login else None
+
+    def allows(self, session: dict | None, needed: str) -> bool:
+        role = self.role(session)
+        return role is not None and ROLES.index(role) >= ROLES.index(needed)
+
     def describe(self, session: dict | None) -> dict:
         """What the frontend needs to know about this visitor."""
-        return {"login_required": not self.no_login, "authenticated": session is not None,
-                "can_read": self.no_login or self.read_without_login or session is not None,
-                "can_act": self.no_login or session is not None,
+        return {"login_required": not self.no_login, "authenticated": session is not None, "role": self.role(session),
+                "can_read": self.allows(session, "viewer"), "can_act": self.allows(session, "operator"),
+                "can_admin": self.allows(session, "admin"),
                 "name": session["name"] if session else None, "csrf": session["csrf"] if session else None,
-                "password_configured": self.password_hash is not None}
+                "password_configured": bool(self.hashes)}

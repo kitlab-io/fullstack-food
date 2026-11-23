@@ -84,7 +84,8 @@ async function doMode() {
   <section class="card actions" aria-label="Actions">
     <h2>Actions</h2>
     <p v-if="!session?.can_act" class="muted">
-      Log in to act on this zone. <button type="button" class="link" @click="emit('login')">Log in</button>
+      <template v-if="session?.authenticated">You are logged in as {{ session.role }}, which can look but not act. Log out and use the operator password to act.</template>
+      <template v-else>Log in to act on this zone. <button type="button" class="link" @click="emit('login')">Log in</button></template>
     </p>
     <template v-else>
       <div class="row">

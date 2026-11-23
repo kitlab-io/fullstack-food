@@ -40,7 +40,8 @@ async function submit() {
     </label>
     <p v-if="error" class="error" role="alert">{{ error }}</p>
     <button type="submit" class="primary" :disabled="busy">Log in</button>
-    <p class="small muted">One password is shared by everyone who looks after this site.</p>
+    <p class="small muted">There is one shared password per role: one to look, one to act, one to change the site.
+      The password you enter decides what you can do.</p>
   </form>
 </template>
 

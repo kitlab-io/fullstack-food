@@ -24,6 +24,23 @@
         "mushroom"
       ]
     },
+    "limits": {
+      "type": "object",
+      "description": "The safety envelope: per quantity, the range no recipe, goal or override may leave",
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "min": {
+            "type": "number"
+          },
+          "max": {
+            "type": "number"
+          }
+        },
+        "minProperties": 1,
+        "additionalProperties": false
+      }
+    },
     "defaults": {
       "type": "object",
       "properties": {

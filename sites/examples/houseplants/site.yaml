@@ -4,6 +4,9 @@ name: "House plants: monitor and water two pots from one reservoir"
 timezone: UTC
 hub: { board: generic-linux }
 theme: default
+safety:
+  actuator_limits:
+    actuator.pump: { max_daily_ml: 400 }    # no recipe, goal or override may dose more per day
 nodes:
   - id: shelf-node
     board: esp32-c3-devkitm

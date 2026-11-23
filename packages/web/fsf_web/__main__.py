@@ -70,10 +70,14 @@ def main() -> None:
 
     static = Path(args.static) if args.static else root / "packages" / "web" / "frontend" / "dist"
     password_hash = os.environ.get("FSF_WEB_PASSWORD_HASH") or None
-    auth = Auth(password_hash, read_without_login=args.read_without_login, no_login=args.no_login)
-    app = create_app(site, catalog, args.db, live, static, developer=args.developer, auth=auth)
+    auth = Auth(password_hash, read_without_login=args.read_without_login, no_login=args.no_login,
+                viewer_hash=os.environ.get("FSF_WEB_VIEWER_PASSWORD_HASH") or None,
+                admin_hash=os.environ.get("FSF_WEB_ADMIN_PASSWORD_HASH") or None)
+    site_dir = Path(args.site) if Path(args.site).is_dir() else Path(args.site).parent
+    app = create_app(site, catalog, args.db, live, static, developer=args.developer, auth=auth, site_dir=site_dir)
     access = ("NO LOGIN: anyone who can reach this port can act" if args.no_login
-              else "no password configured: nobody can log in" if not password_hash else "login required"
+              else "no password configured: nobody can log in" if not auth.hashes
+              else f"login required ({', '.join(auth.hashes)})"
               + (" to act, reading is open" if args.read_without_login else ""))
     print(f"web: site {site.id} on http://{args.host}:{args.port} (db {args.db}, clock {args.clock}); {access}", flush=True)
     try:

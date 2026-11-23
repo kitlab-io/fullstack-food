@@ -15,7 +15,9 @@ contract suite) and I3 (observe mode, commissioning records, bench, calibration 
 acceptance tools), I4 (generated BOM, wiring diagrams, build guide, checklist and LED
 legend), I5 (fault detection, troubleshooting guides, `fsf doctor`) and the software half of
 I6 (smart power strip bridge, `fsf init` with broker logins and ACLs, compose file for a
-real hub, provisioning script, compatibility matrix).
+real hub, provisioning script, compatibility matrix). `docs/plan/studio-plan.md` (editing
+sites and scenarios, managing a live site, a desktop app) has its first phase done: safety
+envelope, per-site library, round-trip YAML writing, revision store, roles.
 Nothing has run on real hardware yet: no pin, wiring or power value in the catalog has been
 confirmed on a bench (`datasheet_checked: false`), and the generated firmware compiles with
 ESPHome but has never been flashed.
@@ -42,6 +44,9 @@ ESPHome but has never been flashed.
 | `docs/agents/` | Guides written for LLM agents, e.g. `diagnose-zone.md` |
 | `packages/hub/fsf_hub/commissioning.py` | Bench test, calibration and zone acceptance, driven over MQTT and recorded by the hub |
 | `packages/sim/fsf_sim` | Simulated nodes, zone physics, fault injection, `MockSystem` test harness |
+| `packages/studio/fsf_studio` | Studio: revisions of a site (saved, validated states with diff and restore). Editors and applying come later |
+| `packages/core/fsf_core/yamlio.py` | Reading YAML for editing and writing it back with comments and order kept. The hub never writes; only the studio does |
+| `sites/<...>/<site>/library/` | A site's own species, recipes, goals and themes, layered over `catalog/`. Cannot replace built-in entries or hold parts |
 | `packages/kasa/fsf_kasa` | Bridge that makes a smart power strip a node: speaks the contract for its outlets and ends their leases |
 | `packages/web/fsf_web` | Dashboard service: FastAPI over the hub database and live MQTT state, shared login, actions sent as hub commands |
 | `packages/web/frontend` | Dashboard frontend (Vue 3, Vite, uPlot), built to `dist/` and served by `fsf_web` |
@@ -106,6 +111,11 @@ without FastAPI, and the ESPHome validation test without the `esphome` command.
 - The simulator publishes a retained `sim/state` and takes `sim/cmd` (speed, pause, fault
   injection). The dashboard shows its Simulator page only when that state is on the bus.
   Real nodes do not listen on `sim/cmd`.
+- The safety envelope is not optional: a species' `limits` and a site's
+  `safety.actuator_limits` bound every recipe, goal and override, at validation and again
+  in the hub. Anything that lets a person change a target must go through them.
+- The dashboard has three shared logins: viewer (read), operator (act), admin (change the
+  site through `/api/studio`). Check the role in the middleware, not in each endpoint.
 - A node may send anything: the hub ignores a payload that is not a JSON object and logs
   `bad_payload` once per topic.
 - The dashboard opens the hub's SQLite file read-only and subscribes to MQTT. Its one way
@@ -143,11 +153,14 @@ without FastAPI, and the ESPHome validation test without the `esphome` command.
   `fsf firmware build ... --include-sim` and `esphome config`.
 - **Add a board pin map**: `pins` in `catalog/boards/`. Mark strapping and shared pins with
   `caution`; they are accepted with a warning and never proposed.
+- **Add a recipe for one site only**: put it in that site's `library/recipes/`, not in `catalog/`.
 - **Add a recipe**: new file in `catalog/recipes/`. Keep `verified: false` and `sources: []`
   until the values are checked against a growing reference. Quote times (`"06:00"`); never use
   `on:` as a YAML key (YAML reads it as `true`).
 - **Add a status**: theme entry with `label` and `meaning`, a place in `priority`, and a
   guide in `catalog/troubleshooting.yaml`. Add an icon for it in the frontend's `status.js`.
+- **Write a YAML file from code**: `fsf_core.yamlio.load` / `save`, never PyYAML's dump, so
+  comments survive.
 - **Add a scenario test**: use the `mock` fixture, drive time with `system.run(...)`, inject
   faults through `system.sim`, assert on `system.status()`, `system.led()`, `system.events()`.
 - **Change control behaviour**: write the failing scenario test first; the suite is fast.

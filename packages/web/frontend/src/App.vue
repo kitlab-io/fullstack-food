@@ -44,7 +44,8 @@ async function leave() {
         <span class="dot" aria-hidden="true"></span>{{ connection.live ? 'Live' : 'Reconnecting' }}
       </span>
       <span v-if="session?.authenticated" class="who">
-        {{ session.name }} <button type="button" class="plain small" @click="leave">Log out</button>
+        {{ session.name }} <span class="pill">{{ session.role }}</span>
+        <button type="button" class="plain small" @click="leave">Log out</button>
       </span>
       <button v-else-if="session?.login_required && session.can_read" type="button" class="plain small" @click="wantsLogin = true">
         Log in to act

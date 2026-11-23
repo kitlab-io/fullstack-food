@@ -93,39 +93,93 @@ class _Schemas:
         return problems
 
 
+# What a site may add in its own library. Parts and boards stay in the built-in catalog:
+# their driver templates end up as code on a node.
+SITE_LIBRARY_KINDS = ("Species", "Recipe", "Goal", "Theme")
+
+
+def band_outside(limits: dict, band: dict) -> str | None:
+    """Why a target band leaves a species' limits for that quantity, or None when it does not."""
+    for key in ("min", "target", "max"):
+        value = band.get(key)
+        if value is None:
+            continue
+        if "min" in limits and value < limits["min"]:
+            return f"{key} {value:g} is below the species limit of {limits['min']:g}"
+        if "max" in limits and value > limits["max"]:
+            return f"{key} {value:g} is above the species limit of {limits['max']:g}"
+    return None
+
+
+def envelope_problems(species: dict, stages: list[dict], where: str) -> list[str]:
+    """Target bands that leave the safety envelope of the species. No recipe, goal or override may."""
+    limits = species.get("limits", {})
+    problems = []
+    for stage in stages:
+        for quantity, band in stage.get("targets", {}).items():
+            reason = band_outside(limits.get(quantity, {}), band)
+            if reason:
+                label = f" stage {stage['id']}" if stage.get("id") not in (None, "steady") else ""
+                problems.append(f"{where}{label}: {quantity} {reason}")
+    return problems
+
+
 class Catalog:
-    """Everything under catalog/, indexed by kind and id."""
+    """Everything under catalog/, indexed by kind and id, plus what a site added in its own library."""
 
     def __init__(self, root: Path):
         self.root = root
         self.schemas = _Schemas(root)
         self.items: dict[str, dict[str, dict]] = {kind: {} for kind in KINDS}
+        self.origin: dict[str, dict[str, str]] = {kind: {} for kind in KINDS}     # id -> "builtin" or "site"
 
-    @classmethod
-    def load(cls, root: Path | None = None) -> "Catalog":
-        root = root or find_repo_root()
-        cat = cls(root)
+    def _read(self, folder: Path, origin: str, kinds: tuple[str, ...], shown: Path) -> list[str]:
         problems: list[str] = []
-        for kind, folder in KINDS.items():
-            for path in sorted((root / "catalog" / folder).glob("*.yaml")):
-                where = str(path.relative_to(root)).replace("\\", "/")
+        for kind, name in KINDS.items():
+            for path in sorted((folder / name).glob("*.yaml")):
+                where = str(path.relative_to(shown)).replace("\\", "/")
+                if kind not in kinds:
+                    problems.append(f"{where}: a site library may hold {', '.join(k.lower() for k in kinds)} only; "
+                                    f"{name} belong to the built-in catalog")
+                    continue
                 doc = _load_yaml(path)
                 if not isinstance(doc, dict) or doc.get("kind") != kind:
                     problems.append(f"{where}: expected kind: {kind}")
                     continue
-                errors = cat.schemas.check(kind, doc, where)
+                errors = self.schemas.check(kind, doc, where)
                 problems += errors
                 if errors:
                     continue
                 if doc["id"] != path.stem:
                     problems.append(f"{where}: id {doc['id']!r} must match the file name")
-                if doc["id"] in cat.items[kind]:
-                    problems.append(f"{where}: duplicate {kind} id {doc['id']!r}")
-                cat.items[kind][doc["id"]] = doc
+                if doc["id"] in self.items[kind]:
+                    problems.append(f"{where}: {kind.lower()} {doc['id']!r} already exists"
+                                    + (" in the built-in catalog; give yours another id" if origin == "site" else ""))
+                    continue
+                self.items[kind][doc["id"]] = doc
+                self.origin[kind][doc["id"]] = origin
+        return problems
+
+    @classmethod
+    def load(cls, root: Path | None = None) -> "Catalog":
+        root = root or find_repo_root()
+        cat = cls(root)
+        problems = cat._read(root / "catalog", "builtin", tuple(KINDS), root)
         problems += cat._cross_check()
         if problems:
             raise ConfigError(problems)
         return cat
+
+    def with_library(self, folder: Path, kinds: tuple[str, ...] = SITE_LIBRARY_KINDS) -> "Catalog":
+        """This catalog plus a site's own entries. A site can add; it cannot replace what is built in."""
+        layered = Catalog(self.root)
+        layered.items = {kind: dict(entries) for kind, entries in self.items.items()}
+        layered.origin = {kind: dict(entries) for kind, entries in self.origin.items()}
+        problems = layered._read(folder, "site", kinds, folder.parent)
+        problems += layered._cross_check()
+        if problems:
+            raise ConfigError(problems)
+        return layered
 
     def get(self, kind: str, id_: str) -> dict:
         return self.items[kind][id_]
@@ -152,6 +206,9 @@ class Catalog:
                 for quantity in targets:
                     if quantity not in quantities:
                         problems.append(f"{sid}: target for unknown quantity {quantity!r}")
+                if recipe["species"] in self.items["Species"]:
+                    named = stage if "stages" in recipe else {**stage, "id": None}       # a steady recipe has no stages to name
+                    problems += envelope_problems(self.items["Species"][recipe["species"]], [named], f"recipe {rid}")
                 if stage.get("advance", {}).get("mode") == "elapsed" and "typical" not in stage.get("duration", {}):
                     problems.append(f"{sid}: advance mode elapsed needs duration.typical")
                 if stage.get("advance", {}).get("mode") == "condition" and "when" not in stage["advance"]:
@@ -162,6 +219,12 @@ class Catalog:
                 for loop in stage.get("control", []):
                     problems += _check_loop(loop, targets, components, f"{sid} loop {loop['id']}")
         theme_problems = []
+        for species in self.items["Species"].values():
+            for quantity, limit in species.get("limits", {}).items():
+                if quantity not in quantities:
+                    problems.append(f"species {species['id']}: limit for unknown quantity {quantity!r}")
+                if "min" in limit and "max" in limit and limit["min"] > limit["max"]:
+                    problems.append(f"species {species['id']}: limit for {quantity} has min above max")
         for theme in self.items["Theme"].values():
             for status in theme["priority"]:
                 if status not in theme["statuses"]:
@@ -236,6 +299,8 @@ class Site:
     devices: dict[str, Device] = field(default_factory=dict)
     zones: dict[str, Zone] = field(default_factory=dict)
     plantings: dict[str, Planting] = field(default_factory=dict)
+    actuator_limits: dict[str, dict] = field(default_factory=dict)     # hard limits per actuator kind that no recipe may exceed
+    catalog: "Catalog | None" = None        # the catalog this site was resolved against, including its own library
     warnings: list[str] = field(default_factory=list)               # worth a look, but the site loads
     pin_proposals: dict[str, dict[str, str]] = field(default_factory=dict)   # device -> signal -> pin, for blanks
     pin_unassigned: list[str] = field(default_factory=list)         # signals no clean pin is left for
@@ -264,6 +329,8 @@ def load_site(path: Path | str, catalog: Catalog) -> Site:
     if path.is_dir():
         path = path / "site.yaml"
     where = path.name
+    if (path.parent / "library").is_dir():      # the site's own species, recipes, goals and themes
+        catalog = catalog.with_library(path.parent / "library")
     raw = _load_yaml(path)
     problems = catalog.schemas.check("Site", raw, where)
     if problems:
@@ -274,7 +341,7 @@ def load_site(path: Path | str, catalog: Catalog) -> Site:
     if theme_id not in catalog.items["Theme"]:
         problems.append(f"{where}: unknown theme {theme_id!r}")
         raise ConfigError(problems)
-    safety_raw = {**SAFETY_DEFAULTS, **raw.get("safety", {})}
+    safety_raw = {**SAFETY_DEFAULTS, **{k: v for k, v in raw.get("safety", {}).items() if k != "actuator_limits"}}
     safety = {
         "sensor_stale_after": seconds(safety_raw["sensor_stale_after"]),
         "reservoir_min_percent": float(safety_raw["reservoir_min_percent"]),
@@ -282,7 +349,8 @@ def load_site(path: Path | str, catalog: Catalog) -> Site:
         "status_hold": seconds(safety_raw["status_hold"]),
     }
     site = Site(id=raw["id"], raw=raw, timezone=raw.get("timezone", "UTC"),
-                theme=catalog.items["Theme"][theme_id], safety=safety,
+                theme=catalog.items["Theme"][theme_id], safety=safety, catalog=catalog,
+                actuator_limits=raw.get("safety", {}).get("actuator_limits", {}),
                 retention={k: seconds(v) for k, v in {**RETENTION_DEFAULTS, **raw.get("retention", {})}.items()},
                 detection={k: seconds(v) for k, v in {**DETECT_DEFAULTS, **raw.get("detection", {})}.items()})
 
@@ -392,6 +460,17 @@ def load_site(path: Path | str, catalog: Catalog) -> Site:
             problems.append(f"{where}: planting {pid}: recipe {recipe['id']} is for {recipe['species']}, not {species['id']}")
         goal = catalog.get("Goal", planting["goal"]) if "goal" in planting else None
         resolved = resolve_recipe(recipe, species, goal, planting.get("overrides"))
+        problems += [f"{where}: {p}" for p in envelope_problems(species, resolved["stages"], f"planting {pid}")]
+        for stage in resolved["stages"]:        # hard limits of the site apply after every layer
+            for loop in stage["control"]:
+                hard = site.actuator_limits.get(loop["actuator"], {})
+                given = loop.get("limits", {})
+                at = f"{where}: planting {pid}: stage {stage['id']} loop {loop['id']}"
+                if "max_on" in hard and (("max_on" not in given and loop["strategy"] != "dose")
+                                         or ("max_on" in given and seconds(given["max_on"]) > seconds(hard["max_on"]))):
+                    problems.append(f"{at}: max_on must be set and at most {hard['max_on']} (site limit for {loop['actuator']})")
+                if "max_daily_ml" in hard and loop["strategy"] == "dose" and given.get("max_daily_ml", float("inf")) > hard["max_daily_ml"]:
+                    problems.append(f"{at}: max_daily_ml must be set and at most {hard['max_daily_ml']:g} (site limit for {loop['actuator']})")
         zone = site.zones[planting["zone"]]
         first_role = resolved["stages"][0].get("zone_role")
         if first_role and zone.role != first_role:

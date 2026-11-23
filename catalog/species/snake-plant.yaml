@@ -4,3 +4,8 @@ common_name: Snake plant
 scientific_name: Dracaena trifasciata
 category: houseplant
 notes: "Prefers to dry out between waterings."
+# Limits are placeholders that bracket the example recipes. Check them against a growing
+# reference before relying on them: they are the range no recipe or override may leave.
+limits:
+  air_temperature: { min: 8, max: 38 }
+  soil_moisture: { min: 5, max: 60 }

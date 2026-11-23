@@ -44,8 +44,8 @@ def test_nothing_is_readable_or_doable_without_the_login(locked):
         assert client.get(path).status_code == 401, path
     assert client.post("/api/commands", json={"name": "pause_zone", "zone": "incubation-chamber"}).status_code == 401
     assert client.get("/api/session").json() == {
-        "login_required": True, "authenticated": False, "can_read": False, "can_act": False, "name": None, "csrf": None,
-        "password_configured": True}
+        "login_required": True, "authenticated": False, "role": None, "can_read": False, "can_act": False,
+        "can_admin": False, "name": None, "csrf": None, "password_configured": True}
     assert client.get("/api/health").status_code == 200
     assert "incubation-chamber" not in system.hub.paused
 
