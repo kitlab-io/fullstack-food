@@ -8,7 +8,9 @@ dependencies = ["pyyaml>=6", "jsonschema>=4.18", "paho-mqtt>=2"]
 
 [project.optional-dependencies]
 web = ["fastapi>=0.115", "uvicorn>=0.30"]      # the dashboard service
-firmware = ["esphome>=2025.2"]                  # only needed to flash nodes
+# ESPHome is not an extra on purpose: it pins exact versions of its own dependencies (and older
+# releases pin paho-mqtt 1.x), which makes this project unresolvable. Install the `esphome` command
+# separately, e.g. `pipx install esphome`; `fsf firmware flash` only calls it.
 kasa = ["python-kasa>=0.7"]                     # only needed for the smart power strip bridge
 
 [project.scripts]
