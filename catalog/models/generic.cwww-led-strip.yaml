@@ -1,0 +1,44 @@
+kind: Model
+id: generic.cwww-led-strip
+name: "12 V CW/WW LED strip"
+implements: [actuator.grow_light]
+interface: { bus: pwm, supply_v: [12, 12], switched_by: mosfet }
+drivers:
+  - runtime: esphome
+    platform: ledc output
+    status: untested
+    control: { type: level, outputs: [cold, warm] }
+    template: |
+      output:
+        - platform: ledc
+          pin: ${pin.cold}
+          id: ${id}_cold
+          frequency: 1220Hz
+        - platform: ledc
+          pin: ${pin.warm}
+          id: ${id}_warm
+          frequency: 1220Hz
+  - { runtime: sim, status: verified }
+# Pins, wiring, power and bench values below are from general experience with this part.
+# Confirm them against the datasheet and on the bench, then set datasheet_checked: true.
+datasheet_checked: false
+pins:
+  - { signal: cold, needs: pwm }
+  - { signal: warm, needs: pwm }
+wiring:
+  - { part: "logic-level N-channel MOSFET", qty: 2, purpose: "low-side switch driven from a 3.3 V pin" }
+  - { part: "100 Ohm resistor", qty: 2, purpose: "gate series resistor" }
+  - { part: "10 kOhm resistor", qty: 2, purpose: "gate pull-down so the load stays off while the board boots" }
+  - { part: "fuse on the 12 V rail", qty: 1, purpose: "protects wiring from a short", when: "the rail has no fuse yet" }
+power: { rail: 12v, notes: "Current depends on strip length: take it from the strip's rating per metre and size the supply for both channels on." }
+bench_test:
+  pulse_s: 2
+  stimulus: "Send a 2 s test pulse"
+  expect: "Both the cold and the warm LEDs light evenly along the strip"
+troubleshooting:
+  - symptom: "Only one colour temperature lights"
+    causes: ["one channel not wired", "cold and warm on the wrong pins"]
+    checks: ["Drive each channel on its own"]
+  - symptom: "Visible flicker or banding on camera"
+    causes: ["PWM frequency too low"]
+    checks: ["Raise the PWM frequency"]

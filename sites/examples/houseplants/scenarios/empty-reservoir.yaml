@@ -1,0 +1,20 @@
+kind: Scenario
+id: empty-reservoir
+title: An empty reservoir blocks the pump and shows reservoir low
+description: >
+  Both pots draw from one reservoir, so both report it. It was full a moment ago and nothing
+  was watered, so the hub also suspects a leak.
+duration: 7h30m
+timeline:
+  - { at: 0, do: set_zone, zone: pothos-window, soil_moisture: 20 }
+  - { at: 0, do: set_reservoir, device: reservoir-level, volume_ml: 0 }
+  - { at: 4h, do: set_reservoir, device: reservoir-level, volume_ml: 5000, note: Refilled }
+expect:
+  - { to: 4h, no_event: dose }
+  - { to: 4h, device: pothos-pump, on_time: { max: 0s } }
+  - { at: 4h, zone: pothos-window, status: reservoir_low }
+  - { at: 4h, zone: pothos-window, active_is: [reservoir_low, needs_water, water_mismatch] }
+  - { at: 4h, zone: pothos-window, led: { color: [0, 0, 255, 0], effect: blink } }
+  - { at: 4h, zone: snake-shelf, status: reservoir_low }
+  - { at: 7h, event: dose, zone: pothos-window, count: { min: 1 } }
+  - { at: 7h30m, zone: pothos-window, status: ok }

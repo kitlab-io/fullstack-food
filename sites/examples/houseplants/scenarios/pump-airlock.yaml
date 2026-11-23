@@ -1,0 +1,26 @@
+kind: Scenario
+id: pump-airlock
+title: A dose that moves no water is noticed and clears after a good one
+description: An airlock makes the pump run dry. Priming the tube fixes it; the next dose proves it.
+duration: 26h
+timeline:
+  - { at: 0, do: set_zone, zone: pothos-window, soil_moisture: 20 }
+  - { at: 0, do: pump_no_flow, device: pothos-pump }
+  - { at: 2h, do: pump_no_flow, device: pothos-pump, active: false, note: The tube is primed }
+expect:
+  # the trigger holds for an hour, then it doses
+  - { at: 1h10m, event: dose, zone: pothos-window, count: 1 }
+  - { at: 1h10m, zone: pothos-window, active_not: no_effect, note: Too early to tell }
+  - { at: 2h, zone: pothos-window, status: no_effect }
+  - { at: 2h, zone: pothos-window, active: needs_water }
+  - { at: 2h, zone: pothos-window, led: { status: no_effect } }
+  - { at: 2h, event: detection, count: 1 }
+  - at: 2h
+    event: detection
+    where: { status: no_effect, subject: pothos-window/watering, level: warn }
+    contains: { detail: soil_moisture did not change after the last dose }
+    count: 1
+  - { at: 2h, zone: snake-shelf, status: ok }
+  - { at: 26h, event: dose, zone: pothos-window, count: 2 }
+  - { at: 26h, zone: pothos-window, active_not: no_effect }
+  - { at: 26h, event: detection_cleared, values: { status: [no_effect], subject: [pothos-window/watering] } }

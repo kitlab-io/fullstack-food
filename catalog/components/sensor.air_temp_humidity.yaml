@@ -1,0 +1,6 @@
+kind: Component
+id: sensor.air_temp_humidity
+class: sensor
+measures:
+  - { quantity: air_temperature, unit: degC }
+  - { quantity: relative_humidity, unit: percent }

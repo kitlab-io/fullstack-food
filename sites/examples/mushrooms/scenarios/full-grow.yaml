@@ -1,0 +1,53 @@
+kind: Scenario
+id: full-grow
+title: A grow moves through incubation, fruiting and harvest
+description: >
+  The heat mat holds the incubation chamber in a 14 degC room. After the typical 14 days the
+  strip asks for a decision and nothing moves by itself. The grower moves the block and
+  confirms, and the setpoints follow it to the fruiting chamber.
+duration: 21d6h10m
+timeline:
+  - { at: 14d3h, command: advance_stage, planting: oyster-1, result: { stage: fruiting }, note: The grower moves the block and confirms }
+  - { at: 21d5h5m, command: advance_stage, planting: oyster-1, result: { stage: harvest } }
+  - { at: 21d6h5m, command: advance_stage, planting: oyster-1, result: { stage: null }, note: Harvested and cleared }
+expect:
+  - { at: 0, zone: fruiting-chamber, status: idle }
+
+  # incubation: in band after a three-hour warm-up, and the empty chamber stays off
+  - { from: 3h, to: 13d3h, zone: incubation-chamber, air_temperature: { min: 21, max: 27 } }
+  - { at: 13d3h, zone: incubation-chamber, status: ok }
+  - { to: 13d3h, device: fr-heater, on_time: { max: 0s } }
+  - { to: 13d3h, device: fr-humidifier, on_time: { max: 0s } }
+  - { to: 13d3h, device: fr-fan, on_time: { max: 0s } }
+  - { to: 13d3h, device: fr-light, on_time: { max: 0s } }
+
+  # the strip asks; the white channel of the RGBW strip
+  - { at: 14d3h, zone: incubation-chamber, status: stage_ready }
+  - { at: 14d3h, zone: incubation-chamber, led: { color: [0, 0, 0, 255] } }
+  - { at: 14d3h, planting: oyster-1, stage: incubation }
+
+  # after the move
+  - { at: 14d3h5m, planting: oyster-1, in_zone: fruiting-chamber }
+  - { at: 14d3h5m, zone: incubation-chamber, status: idle }
+  - { at: 14d3h5m, device: inc-heater, is_on: false }
+
+  # fruiting: two hours to come up to humidity, then three days in band
+  - { from: 14d5h5m, to: 17d5h5m, zone: fruiting-chamber, air_temperature: { min: 13, max: 18 } }
+  - { from: 14d5h5m, to: 17d5h5m, zone: fruiting-chamber, relative_humidity: { min: 80, max: 97 }, note: Brief dips during fan bursts are tolerated }
+  - { from: 14d5h5m, to: 17d5h5m, zone: fruiting-chamber, relative_humidity: { min: 85, share: 0.97 }, note: But it is in band nearly always }
+  - { from: 14d5h5m, to: 17d5h5m, zone: fruiting-chamber, co2: { max: 1000 } }
+  - { from: 14d5h5m, to: 17d5h5m, zone: fruiting-chamber, status: ok }
+  - { from: 14d5h5m, to: 17d5h5m, device: fr-light, on_between: ["07:00", "19:00"] }
+  - { at: 17d5h5m, device: fr-light, level: 0.3 }
+  - { to: 17d5h5m, device: fr-fan, on_time: { min: 30s } }
+
+  # fruiting done, harvest, clear the chamber
+  - { at: 21d5h5m, zone: fruiting-chamber, status: stage_ready }
+  - { at: 21d6h5m, zone: fruiting-chamber, status: stage_ready, note: Harvest waits for the grower too }
+  - { at: 21d6h10m, zone: fruiting-chamber, status: idle }
+  - { at: 21d6h10m, device: fr-heater, is_on: false }
+  - { at: 21d6h10m, device: fr-humidifier, is_on: false }
+  - { at: 21d6h10m, device: fr-fan, is_on: false }
+  - { at: 21d6h10m, device: fr-light, is_on: false }
+  - { at: 21d6h10m, event: stage_advanced, values: { to_stage: [fruiting, harvest] } }
+  - { at: 21d6h10m, event: planting_finished, count: 1 }

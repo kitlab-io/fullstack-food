@@ -1,0 +1,128 @@
+# What each status means in practice, and what to do about it. One source for the
+# generated troubleshooting pages, the dashboard's help page and the agent guide.
+# Causes are ordered most likely first; checks are ordered cheapest first.
+# Hardware advice here is from general experience and has not been tried on a bench.
+kind: Troubleshooting
+statuses:
+  needs_water:
+    doing: "Waiting for the dry reading to hold, then dosing where a pump is fitted, within the daily limit."
+    causes: ["the soil really is dry", "the dose is too small for the pot", "the probe sits in a dry pocket or has come out of the soil"]
+    checks: ["Feel the soil", "Look at the watering loop on the zone page: is it blocked by the interval or the daily limit?", "Check the probe is in to the line and near where water arrives"]
+    clears: "When soil moisture is back inside its band."
+  too_wet:
+    doing: "Not watering. Nothing else can be done automatically."
+    causes: ["watered by hand", "poor drainage", "dose too large", "probe sitting in standing water"]
+    checks: ["Empty the saucer", "Check the drainage holes", "Compare the dose volume with the pot size"]
+    clears: "When the soil has dried into its band."
+  reservoir_low:
+    doing: "Blocking every pump that draws from this reservoir, and stopping a dose that is running."
+    causes: ["the reservoir is nearly empty", "the level sensor reads wrong after being moved", "a leak or siphon emptied it"]
+    checks: ["Look into the reservoir", "If it is not empty, recalibrate the level sensor: fsf calibrate <device>", "Look for water where it should not be"]
+    clears: "When the level is back above the site's minimum (10 % unless changed)."
+  too_cold:
+    doing: "Running the heater where the stage has one, within its max_on limit."
+    causes: ["the room is colder than the heater can make up for", "the chamber is open or poorly insulated", "the heater is unplugged or failed", "the sensor is in a draught"]
+    checks: ["Is the heating loop on, or blocked? See the zone page", "Is the heater warm to the touch?", "Close and insulate the chamber", "Move the sensor to plant height, out of draughts"]
+    clears: "When the temperature is back inside its band for the hold time."
+  too_hot:
+    doing: "Keeping the heater off. Fans run only if the stage has a loop for it."
+    causes: ["direct sun", "the grow light heats the space", "a heater stuck on", "the sensor sits next to a heat source"]
+    checks: ["Is anything warm that should be off?", "Shade the space or move it", "Move the sensor away from lights and electronics"]
+    clears: "When the temperature is back inside its band for the hold time."
+  too_dry:
+    doing: "Running the humidifier where the stage has one."
+    causes: ["the humidifier is out of water", "fan bursts carry the moisture out", "the chamber leaks", "the room air is very dry"]
+    checks: ["Refill the humidifier and check its float", "Look at the fan loop: how often does it run?", "Seal the chamber"]
+    clears: "When humidity is back inside its band for the hold time."
+  too_humid:
+    doing: "Keeping the humidifier off. Fans run only if the stage has a loop for it."
+    causes: ["the humidifier is stuck on or leaking", "no air exchange", "condensation on the sensor"]
+    checks: ["Is the humidifier running although the dashboard says off?", "Open the chamber briefly", "Wipe and move the sensor out of the fog"]
+    clears: "When humidity is back inside its band for the hold time."
+  stale_air:
+    doing: "Running the fan beyond its duty cycle where the stage allows it."
+    causes: ["the fan is blocked or failed", "the substrate is very active", "the CO2 sensor has drifted"]
+    checks: ["Is air moving at the fan?", "Open the chamber for a minute and watch the reading fall", "Recalibrate the CO2 sensor in fresh air"]
+    clears: "When CO2 is back under its limit for the hold time."
+  stage_ready:
+    doing: "Nothing: it waits for a person. The current stage keeps running."
+    causes: ["the stage has run its typical time", "the next stage is in another zone, so the planting has to be carried there"]
+    checks: ["Look at the planting and compare with the hint on the zone page", "Carry it to the next zone if there is one", "Advance the stage on the dashboard"]
+    clears: "When the stage is advanced."
+  critical:
+    doing: "The same as for the reading that caused it; an alert only makes it visible at once."
+    causes: ["a reading is far outside what the species tolerates"]
+    checks: ["Look at the zone page to see which reading it is", "Act on that reading now"]
+    clears: "As soon as the reading is back inside the alert limit."
+  sensor_stale:
+    doing: "Switching off every loop that depends on the missing reading (fail-safe), and saying so in the decision trace."
+    causes: ["a loose wire or connector", "the sensor has failed", "its node is frozen or rebooting", "an I2C address clash after adding a part"]
+    checks: ["On the devices page, find the device whose 'last heard' is old", "Reseat its connector", "Run fsf bench <device>", "Check the node's own status"]
+    clears: "When the sensor reports again."
+  sensor_fault:
+    doing: "Not trusting an impossible value (loops that need it fail safe). A repeated value is still used, but flagged."
+    causes: ["probe disconnected (often reads a fixed extreme value)", "probe out of the soil or the water", "condensation or fog on the sensor", "sensor failed"]
+    checks: ["Read the detail of the detection event in the log: it names the device and the value", "Compare with a reference thermometer or by touch", "Run fsf bench <device>", "Swap in another sensor"]
+    clears: "When the value moves again, or is back in a possible range."
+  offline:
+    doing: "Sending nothing to that node. Its actuators switch off by themselves when their lease ends."
+    causes: ["the node lost power", "weak WiFi", "the broker or the hub host is down", "the node crashed"]
+    checks: ["Is the node's power light on?", "Do other nodes still report? If none do, check the hub and broker", "Move the node or the access point closer"]
+    clears: "When the node reconnects."
+  node_unstable:
+    doing: "Controlling it normally whenever it is reachable."
+    causes: ["supply sags when a motor or the LED strip switches on (brown-out)", "WiFi signal at the edge of range", "a wiring fault that resets the board"]
+    checks: ["Does it drop when a pump, fan or light starts? Then give the load its own supply and check the flyback diode", "Check signal strength where the node sits", "Run fsf node test <node>"]
+    clears: "After an hour without dropouts."
+  actuator_fault:
+    doing: "Still sending commands; none are acknowledged, so nothing can be assumed about the actuator."
+    causes: ["the part is not in the node's firmware (a mains load wired to a board instead of a smart power strip)", "the smart power strip cannot be reached by its bridge", "firmware older than the site file", "the node is busy or frozen"]
+    checks: ["On the devices page, look for 'unanswered commands'", "Rebuild and reflash the node: fsf firmware build, fsf firmware flash", "Run fsf node test <node> --actuate"]
+    clears: "When a command to it is acknowledged again."
+  no_effect:
+    doing: "Carrying on within the limits. Watering is still capped by the interval and the daily limit."
+    causes: ["pump: tube not primed, kinked or off the rollers, or the reservoir pick-up is above the water", "pump wired backwards", "heater or humidifier unplugged, failed or too weak", "the sensor is not where the actuator acts"]
+    checks: ["Send a test pulse from the devices page and watch the actuator", "Follow the tube or cable end to end", "Check the sensor is in the pot or chamber this actuator serves"]
+    clears: "Watering: when a later dose changes the reading. Heating and humidifying: when the reading moves again or the loop no longer wants it on."
+  water_mismatch:
+    doing: "Nothing automatically. reservoir_low will block the pumps if it runs empty."
+    causes: ["a leak at a fitting", "a tube siphoning after the pump stopped", "the level sensor was bumped", "someone took water out"]
+    checks: ["Look under and around the reservoir", "Check each pump outlet is above the water level or has an air gap", "Check the level sensor still points straight down"]
+    clears: "When the level holds for six hours, or the reservoir is refilled."
+  paused:
+    doing: "Keeping every actuator in the zone off."
+    causes: ["someone paused the zone on the dashboard"]
+    checks: ["The log shows who paused it and when", "Resume it on the zone page when the work is done"]
+    clears: "When resumed, or when the pause runs out if it was timed."
+  observing:
+    doing: "Deciding and logging as usual, but sending nothing to the zone's actuators."
+    causes: ["an actuator in the zone has not passed its bench test", "someone switched the zone to observe"]
+    checks: ["The zone page says why", "Bench-test the named actuators: fsf bench <device>", "Then switch the zone to active on the dashboard"]
+    clears: "When every actuator is bench-tested and the zone is switched to active."
+
+symptoms:
+  - symptom: "The pump runs but the soil stays dry"
+    statuses: [no_effect, needs_water]
+    parts: [generic.12v-peristaltic-pump, generic.capacitive-soil-v1.2]
+    causes: ["airlock: the tube is not primed", "the tube is kinked or has slipped off the rollers", "motor polarity reversed, so it pumps back into the reservoir", "the probe is in a different pot than the tube"]
+    checks: ["Send a test pulse and watch which way water moves in the tube", "Follow the tube from reservoir to pot", "Check probe and tube are in the same pot"]
+  - symptom: "Readings jump around"
+    statuses: [sensor_fault]
+    parts: [generic.capacitive-soil-v1.2, generic.hc-sr04, ti.ads1115]
+    causes: ["a loose signal or ground wire", "an analog input left floating", "electrical noise from a pump or the LED strip on the same supply", "water surface rippling under the level sensor"]
+    checks: ["Wiggle the connector while watching the raw data page", "Check the sensor's ground", "Give motors and LEDs their own supply"]
+  - symptom: "A node keeps rebooting"
+    statuses: [node_unstable, offline]
+    parts: [generic.12v-peristaltic-pump, generic.12v-fan, worldsemi.sk6812-rgbw, worldsemi.ws2812b]
+    causes: ["brown-out when a motor or the strip switches on", "missing flyback diode", "a sensor pulling a strapping pin at power-up", "a supply too small for the LED strip"]
+    checks: ["Unplug loads one at a time until it stays up", "Check the power budget in the build guide", "Check no sensor is on a pin marked caution"]
+  - symptom: "The strip shows wrong colours"
+    statuses: []
+    parts: [worldsemi.sk6812-rgbw, worldsemi.ws2812b]
+    causes: ["the strip is RGB but the site file says RGBW, or the other way round", "wrong colour order", "led_count does not match the strip", "3.3 V data without a level shifter"]
+    checks: ["Run the LED check: fsf calibrate <strip>", "Count the LEDs", "Fit the level shifter and a short data wire"]
+  - symptom: "Humidity never reaches its target"
+    statuses: [too_dry, no_effect]
+    parts: [generic.ultrasonic-humidifier, sensirion.scd40]
+    causes: ["the humidifier is out of water", "the fan runs so often that it carries the fog out", "the chamber is not sealed", "the sensor sits in the dry air stream of the fan"]
+    checks: ["Refill and watch for fog during a test pulse", "Lengthen the fan's off time in the recipe", "Seal gaps", "Move the sensor to plant height"]

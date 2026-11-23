@@ -1,0 +1,48 @@
+kind: Model
+id: ti.ads1115
+name: "TI ADS1115 16-bit ADC"
+implements: [sensor.analog_input]
+interface: { bus: i2c, addresses: [0x48, 0x49, 0x4A, 0x4B], supply_v: [2.0, 5.5] }
+drivers:
+  - runtime: esphome
+    platform: ads1115
+    status: untested
+    provides_templates:
+      adc: |
+        sensor:
+          - platform: ads1115
+            ads1115_id: ${provider}_adc
+            multiplexer: ${channel}_GND
+            gain: 4.096
+            update_interval: 30s
+            id: ${id}_raw
+            internal: true
+    template: |
+      ads1115:
+        - id: ${id}_adc
+          address: 0x48
+  - { runtime: linux, module: adafruit_ads1x15, status: bench }
+  - { runtime: sim, status: verified }
+# Pins, wiring, power and bench values below are from general experience with this part.
+# Confirm them against the datasheet and on the bench, then set datasheet_checked: true.
+datasheet_checked: false
+pins:
+  - { signal: sda, needs: i2c_sda }
+  - { signal: scl, needs: i2c_scl }
+provides: { adc: [A0, A1, A2, A3] }
+wiring:
+  - { part: "4.7 kOhm resistor", qty: 2, purpose: "I2C pull-ups to 3.3 V", when: "no breakout on the bus already has pull-ups" }
+power: { rail: 3v3, typical_ma: 1, peak_ma: 1, notes: "Run it from 3.3 V so its I2C lines stay at the board's level; probes on its channels then also run from 3.3 V." }
+bench_test:
+  settle_s: 2
+  plausible: { voltage: [0, 3.3] }
+  stimulus: "Tie channel A0 to ground, then to 3.3 V"
+  expect: "Reads about 0 V, then about 3.3 V"
+troubleshooting:
+  - symptom: "Not found on the I2C bus"
+    causes: ["SDA and SCL swapped", "no pull-ups on the bus", "ADDR pin sets a different address", "loose or long wires"]
+    checks: ["Scan the bus and compare with the addresses listed above", "Check what the ADDR pin is tied to", "Measure 3.3 V at the breakout"]
+  - symptom: "A channel reads noise or follows its neighbour"
+    causes: ["channel left floating", "sensor ground not shared with the ADC"]
+    checks: ["Tie unused channels to ground", "Check the sensor's ground wire"]
+notes: "Bench script: iot-manager/devices/tests/ASD1x15.py"

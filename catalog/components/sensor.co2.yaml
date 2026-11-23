@@ -1,0 +1,5 @@
+kind: Component
+id: sensor.co2
+class: sensor
+measures:
+  - { quantity: co2, unit: ppm }

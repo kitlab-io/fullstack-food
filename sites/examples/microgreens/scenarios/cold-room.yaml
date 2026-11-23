@@ -1,0 +1,14 @@
+kind: Scenario
+id: cold-room
+title: A cold room shows too cold on the strip
+description: The heating fails overnight and comes back.
+duration: 1h40m
+timeline:
+  - { at: 1h, do: set_ambient, air_temperature: 12 }
+  - { at: 1h20m, do: set_ambient, air_temperature: 21 }
+expect:
+  - { at: 1h, zone: tray1, status: ok }
+  - { at: 1h20m, zone: tray1, status: too_cold }
+  - { at: 1h20m, zone: tray1, led: { status: too_cold, color: [0, 180, 255, 0], effect: solid } }
+  - { at: 1h40m, zone: tray1, status: ok }
+  - { at: 1h40m, zone: tray1, led_sequence: [ok, too_cold, ok] }

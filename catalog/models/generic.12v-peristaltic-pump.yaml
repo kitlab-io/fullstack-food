@@ -1,0 +1,50 @@
+kind: Model
+id: generic.12v-peristaltic-pump
+name: "12 V peristaltic pump"
+implements: [actuator.pump]
+interface: { bus: gpio, supply_v: [12, 12], switched_by: mosfet }
+drivers:
+  - runtime: esphome
+    platform: gpio switch
+    status: untested
+    control: { type: switch }
+    template: |
+      switch:
+        - platform: gpio
+          pin: ${pin.gate}
+          id: ${id}_switch
+          restore_mode: ALWAYS_OFF
+          internal: true
+  - { runtime: sim, status: verified }
+# Pins, wiring, power and bench values below are from general experience with this part.
+# Confirm them against the datasheet and on the bench, then set datasheet_checked: true.
+datasheet_checked: false
+pins:
+  - { signal: gate, needs: digital_out }
+wiring:
+  - { part: "logic-level N-channel MOSFET", qty: 1, purpose: "low-side switch driven from a 3.3 V pin" }
+  - { part: "100 Ohm resistor", qty: 1, purpose: "gate series resistor" }
+  - { part: "10 kOhm resistor", qty: 1, purpose: "gate pull-down so the load stays off while the board boots" }
+  - { part: "1N5819 diode", qty: 1, purpose: "flyback protection across the motor" }
+  - { part: "fuse on the 12 V rail", qty: 1, purpose: "protects wiring from a short", when: "the rail has no fuse yet" }
+power: { rail: 12v, typical_ma: 300, peak_ma: 500 }
+calibration:
+  procedure: pump_timed_run
+  produces: [flow_ml_per_s]
+  notes: "Prime the tube, run for a set time into a measuring cup, divide volume by time."
+bench_test:
+  pulse_s: 2
+  stimulus: "Send a 2 s test pulse with the inlet in water"
+  expect: "The rotor turns for 2 s, water advances along the tube towards the outlet, then it stops"
+troubleshooting:
+  - symptom: "Pump runs but no water arrives"
+    causes: ["tube not primed (airlock)", "motor polarity reversed so it pumps backwards", "tube kinked or off the rollers", "reservoir empty"]
+    checks: ["Watch which way water moves in the tube", "Swap the motor wires", "Check the tube path end to end"]
+  - symptom: "Reservoir empties with the pump off"
+    causes: ["siphoning: the outlet is lower than the water level"]
+    checks: ["Raise the outlet above the reservoir or add an air gap"]
+  - symptom: "Node resets or drops off WiFi when it switches on"
+    causes: ["supply sags when the motor starts", "no flyback diode", "no common ground between the 12 V supply and the board"]
+    checks: ["Power the board from its own supply and try again", "Check the diode is fitted and the right way round", "Check grounds are joined"]
+safety: { hazards: [water], notes: "Reservoir below the electronics; anti-siphon arrangement on the outlet." }
+notes: "Set flow_ml_per_s on the device from a timed measurement."

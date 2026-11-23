@@ -1,0 +1,45 @@
+kind: Site
+id: mushrooms
+name: "Mushrooms: warm incubation chamber and humid fruiting chamber"
+timezone: UTC
+hub: { board: generic-linux }
+theme: default
+nodes:
+  - id: incubation-node
+    board: esp32-c3-devkitm
+    runtime: sim
+    devices:
+      # Pins were proposed by `just validate --pins`. Calibration values are examples: replace them
+      # with measured ones before trusting soil moisture or reservoir level on real hardware.
+      - { id: inc-air,    model: aosong.aht20,               as: sensor.air_temp_humidity, pins: { sda: GPIO5, scl: GPIO6 } }
+  - id: fruiting-node
+    board: esp32-c3-devkitm
+    runtime: sim
+    devices:
+      # Pins were proposed by `just validate --pins`. Calibration values are examples: replace them
+      # with measured ones before trusting soil moisture or reservoir level on real hardware.
+      - { id: fr-climate,    model: sensirion.scd40,               as: [sensor.co2, sensor.air_temp_humidity], pins: { sda: GPIO5, scl: GPIO6 } }
+      - { id: fr-heater,     model: generic.12v-heat-wire,         as: actuator.heater, pins: { gate: GPIO7 } }
+      - { id: fr-fan,        model: generic.12v-fan,               as: actuator.fan, pins: { pwm: GPIO10 } }
+      - { id: fr-light,      model: generic.cwww-led-strip,        as: actuator.grow_light, pins: { cold: GPIO0, warm: GPIO1 } }
+      - { id: status-strip,  model: worldsemi.sk6812-rgbw,         as: indicator.led_strip, led_count: 20, pins: { data: GPIO3 } }
+  # Mains loads are switched only by a certified smart power strip, which is a node of its own.
+  - id: plug-strip
+    board: tplink.kasa-hs300
+    runtime: sim            # change to kasa when the real strip exists; its address goes in FSF_KASA_HOST
+    devices:
+      - { id: inc-heater,    model: generic.seedling-heat-mat,     as: actuator.heater,     outlet: 0 }
+      - { id: fr-humidifier, model: generic.ultrasonic-humidifier, as: actuator.humidifier, outlet: 1 }
+zones:
+  - id: incubation-chamber
+    kind: chamber
+    role: incubation
+    devices: [inc-air, inc-heater]
+    indicator: { strip: status-strip, leds: [0, 9] }
+  - id: fruiting-chamber
+    kind: chamber
+    role: fruiting
+    devices: [fr-climate, fr-heater, fr-humidifier, fr-fan, fr-light]
+    indicator: { strip: status-strip, leds: [10, 19] }
+plantings:
+  - { id: oyster-1, zone: incubation-chamber, species: blue-oyster, recipe: blue-oyster.standard }

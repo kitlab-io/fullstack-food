@@ -1,0 +1,61 @@
+kind: Model
+id: generic.capacitive-soil-v1.2
+name: "Capacitive soil moisture sensor v1.2"
+implements: [sensor.soil_moisture]
+interface: { bus: adc, supply_v: [3.3, 5.5] }
+drivers:
+  - runtime: esphome
+    platform: adc
+    status: untested
+    signal_templates:
+      adc: |
+        sensor:
+          - platform: adc
+            pin: ${pin.adc}
+            attenuation: 12db
+            update_interval: 30s
+            id: ${id}_raw
+            internal: true
+    template: |
+      sensor:
+        - platform: copy
+          source_id: ${id}_raw
+          id: ${id}_soil_moisture
+          internal: true
+          filters:
+            - calibrate_linear:
+                - ${cal.dry_v} -> 0.0
+                - ${cal.wet_v} -> 100.0
+            - clamp: { min_value: 0, max_value: 100 }
+  - { runtime: linux, module: adafruit_ads1x15, status: bench, requires: ti.ads1115 }
+  - { runtime: sim, status: verified }
+# Pins, wiring, power and bench values below are from general experience with this part.
+# Confirm them against the datasheet and on the bench, then set datasheet_checked: true.
+datasheet_checked: false
+pins:
+  - { signal: adc, needs: adc }
+power: { rail: 3v3, typical_ma: 5, peak_ma: 5 }
+calibration:
+  procedure: soil_dry_wet
+  produces: [dry_v, wet_v]
+  notes: "Volts at the probe output. Per probe: one reading in dry air, one in water up to the line. Readings drift with temperature and fertiliser, so repeat when they look off."
+bench_test:
+  settle_s: 5
+  plausible: { soil_moisture: [0, 100] }
+  stimulus: "Hold the probe in air, then dip it in a glass of water up to the line"
+  expect: "The raw reading moves clearly between the two and settles within a few seconds"
+troubleshooting:
+  - symptom: "Reading does not change between air and water"
+    causes: ["signal wire on a pin without ADC", "probe not powered", "faulty clone"]
+    checks: ["Check the pin assignment", "Measure the output voltage with a meter in air and in water"]
+  - symptom: "Reading responds very slowly"
+    causes: ["a known fault on some clones of this board"]
+    checks: ["Swap in another probe and compare"]
+  - symptom: "Reading drifts or the probe corrodes"
+    causes: ["water reaching the exposed top edge or the electronics"]
+    checks: ["Seal the edges and the electronics", "Push it in only up to the line"]
+  - symptom: "Pump runs but the reading stays low"
+    causes: ["probe not in the pot being watered", "water running past the probe"]
+    checks: ["Check which pot the probe and the tube are in", "Move the tube outlet near the probe"]
+safety: { hazards: [water], notes: "The electronics at the top of the probe are not waterproof." }
+notes: "Analog output; needs dry/wet calibration per sensor. On an SBC it needs an external ADC."

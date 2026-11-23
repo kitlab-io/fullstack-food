@@ -1,0 +1,8 @@
+kind: Component
+id: actuator.pump
+class: actuator
+description: "Moves water from a reservoir to a zone. Dosed by run time and the device's flow_ml_per_s."
+commands:
+  - { name: "on", args: { duration_s: number, level: number } }
+  - { name: "off" }
+safety: { requires_lease: true }

@@ -1,0 +1,28 @@
+kind: Model
+id: generic.seedling-heat-mat
+name: "Mains seedling heat mat"
+implements: [actuator.heater]
+interface: { bus: mains_relay }
+drivers:
+  - { runtime: kasa, status: untested }
+  - { runtime: esphome, platform: gpio switch (relay), status: untested }
+  - { runtime: sim, status: verified }
+# Pins, wiring, power and bench values below are from general experience with this part.
+# Confirm them against the datasheet and on the bench, then set datasheet_checked: true.
+datasheet_checked: false
+wiring:
+  - { part: "certified smart plug or enclosed, rated relay module", qty: 1, purpose: "switches the mains load; no exposed mains wiring" }
+power: { rail: mains, notes: "Wattage is on the mat's label; stay within the plug's rating." }
+bench_test:
+  pulse_s: 10
+  stimulus: "Send a 10 s test pulse"
+  expect: "The plug clicks on and off; the mat itself is too slow to feel in 10 s"
+troubleshooting:
+  - symptom: "Temperature overshoots the target"
+    causes: ["mats respond slowly", "sensor far from the mat or above it in free air"]
+    checks: ["Widen the band or shorten max_on", "Put the sensor at substrate height"]
+  - symptom: "Heater on for a long time but the zone stays cold"
+    causes: ["mat too small for the space", "cold surface under the mat"]
+    checks: ["Insulate under the mat", "Close the chamber"]
+safety: { hazards: [mains, heat], notes: "Switch only through a certified smart plug or an enclosed, rated relay. Always in a zone with a temperature sensor and a recipe max_on." }
+notes: "Mains load: switch through a certified smart plug or relay module."

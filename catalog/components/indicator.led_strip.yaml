@@ -1,0 +1,6 @@
+kind: Component
+id: indicator.led_strip
+class: indicator
+description: "Addressable LED strip showing zone status per segment."
+commands:
+  - { name: render, args: { brightness: number, segments: array } }

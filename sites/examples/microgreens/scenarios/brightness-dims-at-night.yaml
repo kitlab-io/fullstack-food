@@ -1,0 +1,9 @@
+kind: Scenario
+id: brightness-dims-at-night
+title: The status strip dims at night
+duration: 15h
+timeline:
+  - { at: 0, do: set_ambient, air_temperature: 12, note: So the strip has something to show }
+expect:
+  - { at: 2h, strip: status-strip, brightness: 0.5, note: "10:00, daytime" }
+  - { at: 15h, strip: status-strip, brightness: 0.05, note: "23:00, inside the night hours 22 to 07" }

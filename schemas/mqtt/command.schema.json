@@ -1,0 +1,52 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Device command",
+  "description": "fsf/<site>/<node>/<device>/cmd",
+  "type": "object",
+  "properties": {
+    "id": {
+      "type": "string"
+    },
+    "name": {
+      "enum": [
+        "on",
+        "off",
+        "render"
+      ]
+    },
+    "duration_s": {
+      "type": "number",
+      "exclusiveMinimum": 0
+    },
+    "level": {
+      "type": "number"
+    },
+    "brightness": {
+      "type": "number"
+    },
+    "segments": {
+      "type": "array"
+    }
+  },
+  "required": [
+    "id",
+    "name"
+  ],
+  "additionalProperties": false,
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "name": {
+            "const": "on"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "duration_s"
+        ]
+      }
+    }
+  ]
+}

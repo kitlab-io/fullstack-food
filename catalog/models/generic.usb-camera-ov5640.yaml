@@ -1,0 +1,8 @@
+kind: Model
+id: generic.usb-camera-ov5640
+name: "USB camera, OV5640 5 MP"
+implements: [camera.still]
+interface: { bus: usb }
+drivers:
+  - { runtime: linux, module: opencv-python, status: bench }
+  - { runtime: sim, status: verified }

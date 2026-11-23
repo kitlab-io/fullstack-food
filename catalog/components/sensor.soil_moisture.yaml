@@ -1,0 +1,5 @@
+kind: Component
+id: sensor.soil_moisture
+class: sensor
+measures:
+  - { quantity: soil_moisture, unit: percent }

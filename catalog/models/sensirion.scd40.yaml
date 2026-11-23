@@ -1,0 +1,50 @@
+kind: Model
+id: sensirion.scd40
+name: "Sensirion SCD40"
+implements: [sensor.co2, sensor.air_temp_humidity]
+interface: { bus: i2c, addresses: [0x62], supply_v: [2.4, 5.5] }
+drivers:
+  - runtime: esphome
+    platform: scd4x
+    status: untested
+    template: |
+      sensor:
+        - platform: scd4x
+          update_interval: 30s
+          automatic_self_calibration: false
+          co2: { id: ${id}_co2, internal: true }
+          temperature: { id: ${id}_air_temperature, internal: true }
+          humidity: { id: ${id}_relative_humidity, internal: true }
+  - { runtime: linux, module: adafruit_scd4x, status: untested }
+  - { runtime: sim, status: verified }
+# Pins, wiring, power and bench values below are from general experience with this part.
+# Confirm them against the datasheet and on the bench, then set datasheet_checked: true.
+datasheet_checked: false
+pins:
+  - { signal: sda, needs: i2c_sda }
+  - { signal: scl, needs: i2c_scl }
+wiring:
+  - { part: "4.7 kOhm resistor", qty: 2, purpose: "I2C pull-ups to 3.3 V", when: "no breakout on the bus already has pull-ups" }
+power: { rail: 3v3, typical_ma: 18, peak_ma: 205, notes: "Draws its peak briefly at each measurement; a weak 3.3 V regulator shows up as resets." }
+calibration:
+  procedure: co2_fresh_air
+  produces: []
+  notes: "Automatic self-calibration assumes the sensor sees fresh air regularly. In a closed, high-CO2 chamber switch it off and recalibrate by hand in fresh air."
+bench_test:
+  settle_s: 30
+  plausible: { co2: [380, 2000], air_temperature: [5, 40], relative_humidity: [10, 95] }
+  stimulus: "Breathe towards the sensor for a few seconds"
+  expect: "CO2 climbs by several hundred ppm within about 20 s and decays afterwards"
+troubleshooting:
+  - symptom: "Not found on the I2C bus"
+    causes: ["SDA and SCL swapped", "no pull-ups on the bus", "wrong address", "loose or long wires"]
+    checks: ["Scan the bus and compare with the addresses listed above", "Swap SDA and SCL", "Measure 3.3 V at the breakout"]
+  - symptom: "CO2 drifts lower over days in a fruiting chamber"
+    causes: ["automatic self-calibration is treating chamber air as fresh air"]
+    checks: ["Switch automatic self-calibration off", "Recalibrate in fresh air"]
+  - symptom: "Humidity reads too high or the sensor stops responding"
+    causes: ["fog from the humidifier wets the sensor"]
+    checks: ["Move the sensor out of the fog stream", "Let it dry"]
+  - symptom: "Node resets every few seconds"
+    causes: ["3.3 V supply cannot deliver the measurement peak"]
+    checks: ["Add a capacitor at the sensor", "Power the sensor from a stronger 3.3 V source"]

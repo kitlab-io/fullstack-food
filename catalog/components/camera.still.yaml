@@ -1,0 +1,4 @@
+kind: Component
+id: camera.still
+class: camera
+description: "Still photos for timelapse and vision."

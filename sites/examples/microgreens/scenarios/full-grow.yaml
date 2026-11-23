@@ -1,0 +1,36 @@
+kind: Scenario
+id: full-grow
+title: A full grow from sowing to harvest
+description: >
+  Stages advance on the recipe's schedule: two days of germination, two of blackout, five of
+  light. Clearing the tray finishes the planting and switches everything off.
+duration: 10d1h5m
+timeline:
+  - { at: 9d1h, command: advance_stage, planting: radish-1, result: { stage: null }, note: The tray is harvested and cleared }
+expect:
+  - at: 9d1h
+    event: stage_advanced
+    zone: tray1
+    values:
+      from_stage: [germination, blackout, light]
+      to_stage: [blackout, light, harvest]
+      by: [elapsed, elapsed, elapsed]
+    offsets: [2d, 4d, 9d]
+
+  # the light stays off until the light stage, then follows the 06:00 to 22:00 photoperiod
+  - { to: 3d23h59m30s, device: tray-light, on_time: { max: 0s } }
+  - { from: 4d, to: 8d23h59m30s, device: tray-light, on_between: ["06:00", "22:00"] }
+
+  # watering kept the tray inside the recipe band the whole time
+  - { to: 9d1h, zone: tray1, soil_moisture: { min: 50, max: 90 } }
+  - { at: 9d1h, event: dose, zone: tray1, count: { min: 11 } }
+
+  # harvest is signalled with white, which the RGB-only WS2812B strip mixes from R+G+B
+  - { at: 9d1h, zone: tray1, status: stage_ready }
+  - { at: 9d1h, zone: tray1, led: { color: [255, 255, 255, 0], effect: breathe } }
+
+  - { at: 9d1h5m, zone: tray1, status: idle }
+  - { at: 9d1h5m, zone: tray1, led: { effect: "off" } }
+  - { at: 9d1h5m, device: tray-light, is_on: false }
+  - { at: 9d1h5m, device: tray-pump, is_on: false }
+  - { from: 9d1h5m, no_event: dose, note: An empty tray is not watered }

@@ -1,0 +1,41 @@
+kind: Model
+id: generic.12v-heat-wire
+name: "12 V heat wire"
+implements: [actuator.heater]
+interface: { bus: gpio, supply_v: [12, 12], switched_by: mosfet }
+drivers:
+  - runtime: esphome
+    platform: gpio switch
+    status: untested
+    control: { type: switch }
+    template: |
+      switch:
+        - platform: gpio
+          pin: ${pin.gate}
+          id: ${id}_switch
+          restore_mode: ALWAYS_OFF
+          internal: true
+  - { runtime: sim, status: verified }
+# Pins, wiring, power and bench values below are from general experience with this part.
+# Confirm them against the datasheet and on the bench, then set datasheet_checked: true.
+datasheet_checked: false
+pins:
+  - { signal: gate, needs: digital_out }
+wiring:
+  - { part: "logic-level N-channel MOSFET", qty: 1, purpose: "low-side switch driven from a 3.3 V pin" }
+  - { part: "100 Ohm resistor", qty: 1, purpose: "gate series resistor" }
+  - { part: "10 kOhm resistor", qty: 1, purpose: "gate pull-down so the load stays off while the board boots" }
+  - { part: "fuse on the 12 V rail", qty: 1, purpose: "protects wiring from a short", when: "the rail has no fuse yet" }
+power: { rail: 12v, notes: "Current depends on the length of wire: measure it and size the MOSFET, fuse and supply for it." }
+bench_test:
+  pulse_s: 10
+  stimulus: "Send a 10 s test pulse with a temperature probe taped to the wire"
+  expect: "The wire warms noticeably and cools again after the pulse"
+troubleshooting:
+  - symptom: "Heater on for a long time but the chamber does not warm"
+    causes: ["wire too short or supply too weak for the chamber", "chamber leaks heat", "sensor far from the heated air"]
+    checks: ["Measure the current", "Insulate the chamber", "Move the sensor to mid-height, away from the wire"]
+  - symptom: "MOSFET gets hot"
+    causes: ["not a logic-level part, so 3.3 V does not switch it fully on"]
+    checks: ["Measure the voltage across the MOSFET while on", "Fit a logic-level part or a heatsink"]
+safety: { hazards: [heat], notes: "Always in a zone with a temperature sensor and a recipe max_on. Keep the wire off plastic and substrate bags." }

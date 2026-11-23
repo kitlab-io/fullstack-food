@@ -1,0 +1,5 @@
+kind: Component
+id: sensor.light
+class: sensor
+measures:
+  - { quantity: illuminance, unit: lux }

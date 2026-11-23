@@ -1,0 +1,11 @@
+kind: Species
+id: blue-oyster
+common_name: Blue oyster mushroom
+scientific_name: Pleurotus ostreatus var. columbinus
+category: mushroom
+# Limits are placeholders that bracket the example recipes. Check them against a growing
+# reference before relying on them: they are the range no recipe or override may leave.
+limits:
+  air_temperature: { min: 8, max: 30 }
+  relative_humidity: { min: 60, max: 100 }
+  co2: { max: 2000 }

@@ -1,0 +1,4 @@
+kind: Goal
+id: balanced
+description: "Recipe as written."
+overlay: {}

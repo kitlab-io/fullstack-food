@@ -1,0 +1,43 @@
+kind: Model
+id: aosong.aht20
+name: "Aosong AHT20"
+implements: [sensor.air_temp_humidity]
+interface: { bus: i2c, addresses: [0x38], supply_v: [2.0, 5.5] }
+drivers:
+  - runtime: esphome
+    platform: aht10
+    status: untested
+    template: |
+      sensor:
+        - platform: aht10
+          variant: AHT20
+          update_interval: 30s
+          temperature: { id: ${id}_air_temperature, internal: true }
+          humidity: { id: ${id}_relative_humidity, internal: true }
+  - { runtime: linux, module: adafruit_ahtx0, status: bench }
+  - { runtime: sim, status: verified }
+# Pins, wiring, power and bench values below are from general experience with this part.
+# Confirm them against the datasheet and on the bench, then set datasheet_checked: true.
+datasheet_checked: false
+pins:
+  - { signal: sda, needs: i2c_sda }
+  - { signal: scl, needs: i2c_scl }
+wiring:
+  - { part: "4.7 kOhm resistor", qty: 2, purpose: "I2C pull-ups to 3.3 V", when: "no breakout on the bus already has pull-ups" }
+power: { rail: 3v3, typical_ma: 1, peak_ma: 1 }
+bench_test:
+  settle_s: 5
+  plausible: { air_temperature: [5, 40], relative_humidity: [10, 95] }
+  stimulus: "Breathe on the sensor"
+  expect: "Humidity rises within a few seconds and falls back afterwards"
+troubleshooting:
+  - symptom: "Not found on the I2C bus"
+    causes: ["SDA and SCL swapped", "no pull-ups on the bus", "wrong address", "loose or long wires"]
+    checks: ["Scan the bus and compare with the addresses listed above", "Swap SDA and SCL", "Measure 3.3 V at the breakout"]
+  - symptom: "Two AHT20 on one node: only one answers"
+    causes: ["the address is fixed, so two cannot share a bus"]
+    checks: ["Put the second one behind an I2C multiplexer or on another node"]
+  - symptom: "Humidity stuck near 100 %"
+    causes: ["condensation on the sensor", "placed in the path of a humidifier"]
+    checks: ["Let it dry", "Move it out of the fog stream"]
+notes: "Bench script: iot-manager/devices/tests/AHTx0.py"

@@ -1,0 +1,8 @@
+kind: Board
+id: generic-linux
+name: "Any Linux host"
+class: sbc
+runtimes: [linux, sim]
+os: [any]
+buses: [usb, wifi]
+notes: "Used for the mock system."

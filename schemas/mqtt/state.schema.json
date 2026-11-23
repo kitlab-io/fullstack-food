@@ -1,0 +1,34 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Device state",
+  "description": "fsf/<site>/<node>/<device>/state (retained). Sensors add one number per quantity; actuators add `on`.",
+  "type": "object",
+  "properties": {
+    "t": {
+      "type": "string"
+    },
+    "on": {
+      "type": "boolean"
+    },
+    "level": {
+      "type": "number"
+    },
+    "segments": {
+      "type": "array"
+    },
+    "brightness": {
+      "type": "number"
+    }
+  },
+  "required": [
+    "t"
+  ],
+  "additionalProperties": {
+    "type": [
+      "number",
+      "boolean",
+      "string",
+      "null"
+    ]
+  }
+}

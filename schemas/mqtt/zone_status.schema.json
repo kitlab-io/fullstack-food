@@ -1,0 +1,41 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Zone status",
+  "description": "fsf/<site>/zone/<zone>/status (retained)",
+  "type": "object",
+  "properties": {
+    "t": {
+      "type": "string"
+    },
+    "state": {
+      "type": "string"
+    },
+    "active": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "planting": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "stage": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "readings": {
+      "type": "object"
+    }
+  },
+  "required": [
+    "t",
+    "state",
+    "active"
+  ],
+  "additionalProperties": false
+}

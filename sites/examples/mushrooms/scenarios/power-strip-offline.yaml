@@ -1,0 +1,18 @@
+kind: Scenario
+id: power-strip-offline
+title: An offline node is reported and its actuators fall safe
+description: >
+  The heat mat is on the smart power strip. The LED strip is on another node, so it can still
+  show what happened. The lease ends on the node; no command is needed to switch the mat off.
+duration: 2h15m
+timeline:
+  - { at: 10m, do: node_offline, node: plug-strip }
+  - { at: 15m, do: node_offline, node: plug-strip, active: false }
+expect:
+  - { at: 10m, device: inc-heater, is_on: true, note: The mat is heating when the strip drops off }
+  - { at: 11m, zone: incubation-chamber, status: offline }
+  - { at: 11m, zone: incubation-chamber, led: { status: offline, effect: blink_slow } }
+  - { at: 15m, device: inc-heater, is_on: false }
+  - { at: 15m, zone: fruiting-chamber, status: offline, note: The strip also carries that chamber's humidifier }
+  - { at: 2h15m, zone: incubation-chamber, status: ok }
+  - { at: 2h15m, zone: incubation-chamber, air_temperature: { min: 21 } }

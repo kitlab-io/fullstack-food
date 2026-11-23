@@ -1,0 +1,13 @@
+kind: Species
+id: pothos
+common_name: Pothos
+scientific_name: Epipremnum aureum
+category: houseplant
+defaults:
+  alerts:
+    - { status: critical, quantity: air_temperature, below: 10 }
+# Limits are placeholders that bracket the example recipes. Check them against a growing
+# reference before relying on them: they are the range no recipe or override may leave.
+limits:
+  air_temperature: { min: 10, max: 35 }
+  soil_moisture: { min: 15, max: 80 }

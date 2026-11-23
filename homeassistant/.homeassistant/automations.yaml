@@ -1,0 +1,19 @@
+- id: '1739622377401'
+  alias: camera snapshot plantcam
+  description: ''
+  triggers:
+  - trigger: webhook
+    allowed_methods:
+    - POST
+    - PUT
+    local_only: true
+    webhook_id: !secret plantcam_webhook_id
+  conditions: []
+  actions:
+  - action: camera.snapshot
+    metadata: {}
+    data:
+      filename: /home/fullstackfood/esphome/plantcam.jpg
+    target:
+      device_id: !secret plantcam_device_id
+  mode: single

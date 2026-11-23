@@ -1,0 +1,44 @@
+kind: Model
+id: bosch.bme280
+name: "Bosch BME280"
+implements: [sensor.air_temp_humidity, sensor.barometric_pressure]
+interface: { bus: i2c, addresses: [0x76, 0x77], supply_v: [1.8, 3.6] }
+drivers:
+  - runtime: esphome
+    platform: bme280_i2c
+    status: untested
+    template: |
+      sensor:
+        - platform: bme280_i2c
+          address: 0x76
+          update_interval: 30s
+          temperature: { id: ${id}_air_temperature, internal: true }
+          humidity: { id: ${id}_relative_humidity, internal: true }
+          pressure: { id: ${id}_pressure, internal: true }
+  - { runtime: linux, module: adafruit_bme280, status: bench }
+  - { runtime: sim, status: verified }
+# Pins, wiring, power and bench values below are from general experience with this part.
+# Confirm them against the datasheet and on the bench, then set datasheet_checked: true.
+datasheet_checked: false
+pins:
+  - { signal: sda, needs: i2c_sda }
+  - { signal: scl, needs: i2c_scl }
+wiring:
+  - { part: "4.7 kOhm resistor", qty: 2, purpose: "I2C pull-ups to 3.3 V", when: "no breakout on the bus already has pull-ups" }
+power: { rail: 3v3, typical_ma: 1, peak_ma: 4 }
+bench_test:
+  settle_s: 5
+  plausible: { air_temperature: [5, 40], relative_humidity: [10, 95] }
+  stimulus: "Breathe on the sensor"
+  expect: "Humidity rises within a few seconds and falls back afterwards"
+troubleshooting:
+  - symptom: "Not found on the I2C bus"
+    causes: ["SDA and SCL swapped", "no pull-ups on the bus", "wrong address", "loose or long wires"]
+    checks: ["Scan the bus and compare with the addresses listed above", "Swap SDA and SCL", "Measure 3.3 V at the breakout"]
+  - symptom: "Temperature and pressure work but there is no humidity"
+    causes: ["the breakout carries a BMP280, which has no humidity sensor"]
+    checks: ["Read the chip id", "Compare the marking on the chip with a known BME280"]
+  - symptom: "Reads a few degrees warm"
+    causes: ["self-heating", "mounted next to a regulator, the board or a light"]
+    checks: ["Move the sensor away from heat sources on a short cable"]
+notes: "Bench script: iot-manager/devices/tests/BME280.py"

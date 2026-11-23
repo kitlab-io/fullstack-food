@@ -1,0 +1,425 @@
+"""The `fsf` command line (also `python -m fsf_core`).
+
+    fsf init <name> --from <example>        start a real site and generate its credentials
+    fsf validate [--pins] [site ...]        check the catalog and site files
+    fsf firmware build <site>               one ESPHome config per node
+    fsf firmware flash <site> <node>        compile and upload with the ESPHome command line
+    fsf node test <node> --site <site>      run the node contract suite against a broker
+    fsf docs build <site>                   BOM, wiring diagrams, build guide, checklist, LED legend
+    fsf bench <device> --site <site>        bench-test one device and record the result
+    fsf calibrate <device> --site <site>    measure a device's calibration values
+    fsf zone mode <zone> observe|active     compute-only or really switching
+    fsf zone test <zone> --site <site>      shortened acceptance run of a zone in observe mode
+    fsf commissioning --site <site>         what has been tested so far
+    fsf doctor --site <site>                health check of a running installation
+    fsf docs troubleshooting                troubleshooting pages by status, symptom and part
+    fsf docs compatibility                  which part and board has been tried with which runtime
+    fsf scenario run <file or site> ...     simulate a site against a scenario file and check what it expects
+"""
+
+from __future__ import annotations
+
+import argparse
+import os
+import sys
+import time
+from pathlib import Path
+
+from .catalog import Catalog, ConfigError, find_repo_root, load_site
+
+
+def _validate(args, root: Path, catalog: Catalog) -> int:
+    from .troubleshooting import load as load_troubleshooting
+
+    try:
+        guides = load_troubleshooting(catalog)
+    except ConfigError as err:
+        print("catalog: INVALID")
+        print("\n".join(f"  {p}" for p in err.problems))
+        return 1
+    counts = ", ".join(f"{len(v)} {k.lower()}" for k, v in catalog.items.items())
+    print(f"catalog: ok ({counts}, {len(guides['statuses'])} status guides)")
+    sites = [Path(s) for s in args.sites] or sorted((root / "sites" / "examples").glob("*/site.yaml"))
+    failed = False
+    for path in sites:
+        try:
+            site = load_site(path, catalog)
+            print(f"site {site.id}: ok ({len(site.devices)} devices, {len(site.zones)} zones, {len(site.plantings)} plantings)")
+            for warning in site.warnings:
+                print(f"  warning: {warning}")
+            failed |= _validate_scenarios(path, catalog)
+            if args.pins:
+                for device_id, pins in site.pin_proposals.items():
+                    print(f"  propose: {device_id}: pins: {{ {', '.join(f'{s}: {p}' for s, p in pins.items())} }}")
+                for line in site.pin_unassigned:
+                    print(f"  no pin: {line}")
+        except ConfigError as err:
+            failed = True
+            print(f"site {path}: INVALID")
+            print("\n".join(f"  {p}" for p in err.problems))
+    return 1 if failed else 0
+
+
+def _firmware(args, root: Path, catalog: Catalog) -> int:
+    from .firmware import FirmwareError, build, flash
+
+    site = load_site(args.site, catalog)
+    out_dir = Path(args.out) if args.out else root / "build" / "firmware" / site.id
+    try:
+        if args.action == "build":
+            site_dir = Path(args.site) if Path(args.site).is_dir() else Path(args.site).parent
+            written, warnings = build(site, catalog, out_dir, str(args.site).replace("\\", "/"), include_sim=args.include_sim,
+                                      secrets_file=site_dir / "secrets.yaml")
+            for path in written:
+                print(f"wrote {path}")
+            for warning in warnings:
+                print(f"warning: {warning}")
+            if (out_dir / "secrets.yaml").exists():
+                print("next: check wifi and mqtt_host in the site's secrets.yaml, then `fsf firmware flash`")
+            else:
+                print(f"next: copy {out_dir / 'secrets.example.yaml'} to secrets.yaml, fill it in, then `fsf firmware flash`")
+            return 0
+        return flash(out_dir / f"{args.node}.yaml", args.device)
+    except FirmwareError as err:
+        print("firmware: FAILED")
+        print("\n".join(f"  {p}" for p in err.problems))
+        return 1
+
+
+def _init(args, root: Path, catalog: Catalog) -> int:
+    from .init import InitError, init
+
+    try:
+        written = init(args.name, Path(args.source), root, catalog, Path(args.dir) if args.dir else None)
+    except InitError as err:
+        print(f"init: {err}")
+        return 1
+    for path in written:
+        print(f"wrote {path}")
+    folder = written[0].parent
+    print(f"next: edit {folder / 'site.yaml'} (node runtimes, plantings), fill in wifi and mqtt_host in secrets.yaml,\n"
+          "      set the dashboard password hash in web.env, then start the stack with deploy/compose/sbc.yaml")
+    return 0
+
+
+def _docs(args, root: Path, catalog: Catalog) -> int:
+    from .builddocs import build, power_budget
+
+    if args.action == "compatibility":
+        from .builddocs import compatibility_html, compatibility_markdown
+
+        out_dir = Path(args.out) if args.out else root / "build" / "docs"
+        out_dir.mkdir(parents=True, exist_ok=True)
+        for name, text in (("compatibility.md", compatibility_markdown(catalog)), ("compatibility.html", compatibility_html(catalog))):
+            (out_dir / name).write_text(text, encoding="utf-8", newline="\n")
+            print(f"wrote {out_dir / name}")
+        return 0
+    if args.action == "troubleshooting":
+        from .troubleshooting import build as build_troubleshooting
+
+        for path in build_troubleshooting(catalog, Path(args.out) if args.out else root / "build" / "docs" / "troubleshooting"):
+            print(f"wrote {path}")
+        return 0
+    site = load_site(args.site, catalog)
+    out_dir = Path(args.out) if args.out else root / "build" / "docs" / site.id
+    for path in build(site, catalog, out_dir):
+        print(f"wrote {path}")
+    for entry in power_budget(site, catalog):
+        for warning in entry["warnings"]:
+            print(f"warning: node {entry['node']}: {warning}")
+    return 0
+
+
+def _node_test(args, root: Path, catalog: Catalog) -> int:
+    from .bus import MqttBus
+    from .nodetest import NodeContract
+
+    site = load_site(args.site, catalog)
+    bus = MqttBus(args.mqtt_host, args.mqtt_port, client_id=f"fsf-nodetest-{site.id}",
+                  username=os.environ.get("FSF_MQTT_USERNAME"), password=os.environ.get("FSF_MQTT_PASSWORD"))
+
+    def wait(seconds: float) -> None:
+        deadline = time.monotonic() + seconds
+        while time.monotonic() < deadline:
+            bus.poll()
+            time.sleep(0.05)
+        bus.poll()
+
+    try:
+        contract = NodeContract(site, catalog, args.node, bus, wait)
+        if args.actuate:
+            print(f"switching every actuator on {args.node} on for a few seconds", flush=True)
+
+        def unplug() -> None:
+            print(f"unplug {args.node} now; waiting up to 60 s for the broker to report it offline", flush=True)
+
+        checks = contract.run(actuate=args.actuate, power_cut=unplug if args.last_will else None)
+    except ValueError as err:
+        print(f"node test: {err}")
+        return 1
+    finally:
+        bus.close()
+    for check in checks:
+        print(check)
+    failed = sum(not c.ok for c in checks)
+    print(f"{len(checks) - failed} passed, {failed} failed")
+    return 1 if failed else 0
+
+
+def _doctor(args, root: Path, catalog: Catalog) -> int:
+    from .bus import MqttBus
+    from .doctor import Doctor
+
+    site = load_site(args.site, catalog)
+    print(f"site {site.id}: valid")
+    try:
+        bus = MqttBus(args.mqtt_host, args.mqtt_port, client_id=f"fsf-doctor-{site.id}",
+                      username=os.environ.get("FSF_MQTT_USERNAME"), password=os.environ.get("FSF_MQTT_PASSWORD"))
+    except OSError as err:
+        print(f"FAIL  broker is reachable: {err}. Fix: check --mqtt-host and that the broker is running")
+        return 1
+
+    def wait(seconds: float) -> None:
+        deadline = time.monotonic() + seconds
+        while time.monotonic() < deadline:
+            bus.poll()
+            time.sleep(0.05)
+
+    try:
+        doctor = Doctor(site, catalog, bus, wait, db_path=args.db)
+        checks = doctor.run()
+        if args.bundle:
+            print(f"wrote {doctor.bundle(checks, Path(args.bundle))} (secrets replaced)")
+    finally:
+        bus.close()
+    for check in checks:
+        print(check)
+    failed = sum(not c.ok for c in checks)
+    print(f"{len(checks) - failed} passed, {failed} failed")
+    return 1 if failed else 0
+
+
+class _Console:
+    """Talks to the person doing the commissioning."""
+
+    def say(self, text: str) -> None:
+        print(f"\n>> {text}", flush=True)
+
+    def confirm(self, question: str) -> bool:
+        return input(f"   {question}? [y/N] ").strip().lower() in ("y", "yes")
+
+    def number(self, question: str) -> float:
+        while True:
+            try:
+                return float(input(f"   {question}: ").strip())
+            except ValueError:
+                print("   a number, please")
+
+
+def _commissioning(args, root: Path, catalog: Catalog) -> int:
+    from fsf_hub.commissioning import Bench, Calibrate, CommissioningError, HubClient, ZoneAcceptance
+
+    from .bus import MqttBus
+    from .clock import SystemClock
+
+    site = load_site(args.site, catalog)
+    bus = MqttBus(args.mqtt_host, args.mqtt_port, client_id=f"fsf-commission-{site.id}",
+                  username=os.environ.get("FSF_MQTT_USERNAME"), password=os.environ.get("FSF_MQTT_PASSWORD"))
+
+    def wait(seconds: float) -> None:
+        deadline = time.monotonic() + seconds
+        while time.monotonic() < deadline:
+            bus.poll()
+            time.sleep(0.05)
+        bus.poll()
+
+    try:
+        hub = HubClient(site.id, bus, wait, by=os.environ.get("USER") or os.environ.get("USERNAME") or "fsf")
+        if args.command == "commissioning":
+            hub.observing(next(iter(site.zones)))        # waits for the retained hub state
+            for zone_id, why in sorted(hub.state["observing"].items()):
+                print(f"zone {zone_id}: observe ({why})")
+            for record in sorted(hub.state["commissioning"], key=lambda r: (r["scope"], r["subject"], r["step"])):
+                print(f"{record['scope']} {record['subject']}: {record['step']} {'passed' if record['ok'] else 'FAILED'} "
+                      f"{record['t'][:16]} by {record.get('by') or 'unknown'}")
+            return 0
+        if args.command == "zone" and args.action == "mode":
+            print(f"zone {args.zone}: {hub.call('set_zone_mode', zone=args.zone, mode=args.mode)['mode']}")
+            return 0
+        if args.command == "bench":
+            checks = Bench(site, catalog, args.device, bus, wait, _Console(), hub).run()
+        elif args.command == "calibrate":
+            checks, values = Calibrate(site, catalog, args.device, bus, wait, _Console(), hub).run()
+            if values:
+                shown = ", ".join(f"{k}: {v}" for k, v in values.items())
+                target = "the device" if "flow_ml_per_s" in values else "calibration: { ... } of the device"
+                print(f"\nput into {target} in the site file, then rebuild and reflash the node:\n  {shown}")
+        else:
+            print(f"running zone {args.zone} for {args.minutes:g} min at {args.speed:g}x; its actuators will switch", flush=True)
+            checks = ZoneAcceptance(site, catalog, args.zone, bus, SystemClock(), wait, hub, stage=args.stage,
+                                    speed=args.speed, run_s=args.minutes * 60).run()
+    except CommissioningError as err:
+        print(f"{args.command}: {err}")
+        return 1
+    finally:
+        bus.close()
+    for check in checks:
+        print(check)
+    failed = sum(not c.ok for c in checks)
+    print(f"{len(checks) - failed} passed, {failed} failed; recorded by the hub")
+    return 1 if failed else 0
+
+
+def _validate_scenarios(site_path: Path, catalog: Catalog) -> bool:
+    """Check the scenario files of a site. True when one is invalid."""
+    try:
+        from fsf_sim import find_scenarios, load_scenario
+    except ImportError:         # the simulator is not installed on a hub
+        return False
+    files = find_scenarios(site_path if site_path.is_dir() else site_path.parent)
+    problems = []
+    for file in files:
+        try:
+            load_scenario(file, catalog)
+        except ConfigError as err:
+            problems += err.problems
+    if files:
+        print(f"  {len(files)} scenarios: {'INVALID' if problems else 'ok'}")
+        for problem in problems:
+            print(f"    {problem}")
+    return bool(problems)
+
+
+def _scenario(args, root: Path, catalog: Catalog) -> int:
+    from fsf_sim import find_scenarios, run_scenario
+
+    files: list[Path] = []
+    for given in map(Path, args.paths):
+        found = find_scenarios(given) if given.is_dir() else [given]
+        if not found:
+            print(f"{given}: no scenario files in {given / 'scenarios'}")
+            return 1
+        files += found
+    out = Path(args.out) if args.out else root / "build" / "scenarios" if args.serve else None
+    failed, result = 0, None
+    for file in files:
+        folder = out / file.parent.parent.name / file.stem if out else None
+        try:
+            result = run_scenario(file, catalog, out_dir=folder, keep_system=args.serve and file == files[-1])
+        except ConfigError as err:
+            failed += 1
+            print(f"scenario {file}: INVALID")
+            print("\n".join(f"  {p}" for p in err.problems))
+            continue
+        failed += not result.passed
+        print(result.report())
+        if folder:
+            print(f"  database and result.json in {folder}")
+    print(f"{len(files) - failed} of {len(files)} scenarios passed")
+    if args.serve and result is not None and result.system is not None:
+        from fsf_web.replay import serve_run
+
+        print("The simulated environment is a guess, not measured from a real site.")
+        serve_run(result, args.port, root / "packages" / "web" / "frontend" / "dist")
+    return 1 if failed else 0
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(prog="fsf")
+    sub = parser.add_subparsers(dest="command", required=True)
+    init = sub.add_parser("init", help="start a real site from an example and generate its credentials")
+    init.add_argument("name", help="id of the new site; becomes sites/local/<name>/")
+    init.add_argument("--from", dest="source", required=True, help="site directory or site.yaml to start from")
+    init.add_argument("--dir", help="write here instead of sites/local/<name>")
+
+    validate = sub.add_parser("validate", help="validate the catalog and site files")
+    validate.add_argument("sites", nargs="*", help="site directories or files (default: sites/examples/*)")
+    validate.add_argument("--pins", action="store_true", help="also propose pins for devices that have none assigned")
+
+    firmware = sub.add_parser("firmware", help="generate and flash node firmware").add_subparsers(dest="action", required=True)
+    build = firmware.add_parser("build", help="write one ESPHome config per node")
+    build.add_argument("site", help="site directory or site.yaml")
+    build.add_argument("--out", help="output folder (default: build/firmware/<site id>)")
+    build.add_argument("--include-sim", action="store_true",
+                       help="also build simulated nodes whose board can run ESPHome")
+    flash = firmware.add_parser("flash", help="compile and upload one node with the esphome command")
+    flash.add_argument("site", help="site directory or site.yaml")
+    flash.add_argument("node")
+    flash.add_argument("--out", help="folder the configs were built into")
+    flash.add_argument("--device", help="serial port or address; default lets esphome choose")
+
+    docs = sub.add_parser("docs", help="generate build documents").add_subparsers(dest="action", required=True)
+    docs_build = docs.add_parser("build", help="BOM, wiring diagrams, build guide, checklist and LED legend for a site")
+    docs_build.add_argument("site", help="site directory or site.yaml")
+    docs_build.add_argument("--out", help="output folder (default: build/docs/<site id>)")
+
+    docs_compat = docs.add_parser("compatibility", help="which part and board has been tried with which runtime")
+    docs_compat.add_argument("--out", help="output folder (default: build/docs)")
+    docs_trouble = docs.add_parser("troubleshooting", help="troubleshooting pages by status, symptom and part")
+    docs_trouble.add_argument("--out", help="output folder (default: build/docs/troubleshooting)")
+
+    node = sub.add_parser("node", help="work with one node").add_subparsers(dest="action", required=True)
+    test = node.add_parser("test", help="run the node contract suite against a broker")
+    test.add_argument("node")
+    test.add_argument("--site", required=True, help="site directory or site.yaml")
+    test.add_argument("--mqtt-host", default=os.environ.get("FSF_MQTT_HOST", "localhost"))
+    test.add_argument("--mqtt-port", type=int, default=int(os.environ.get("FSF_MQTT_PORT", "1883")))
+    test.add_argument("--actuate", action="store_true", help="also switch every actuator on the node for a few seconds")
+    test.add_argument("--last-will", action="store_true", help="ask for the node to be unplugged and check it is reported offline")
+
+    def broker(p) -> None:
+        p.add_argument("--site", required=True, help="site directory or site.yaml")
+        p.add_argument("--mqtt-host", default=os.environ.get("FSF_MQTT_HOST", "localhost"))
+        p.add_argument("--mqtt-port", type=int, default=int(os.environ.get("FSF_MQTT_PORT", "1883")))
+
+    bench = sub.add_parser("bench", help="bench-test one device through the running hub")
+    bench.add_argument("device")
+    broker(bench)
+    calibrate = sub.add_parser("calibrate", help="measure the calibration values of one device")
+    calibrate.add_argument("device")
+    broker(calibrate)
+    zone = sub.add_parser("zone", help="zone mode and acceptance").add_subparsers(dest="action", required=True)
+    mode = zone.add_parser("mode", help="observe: decisions are logged, nothing is switched")
+    mode.add_argument("zone")
+    mode.add_argument("mode", choices=["observe", "active"])
+    broker(mode)
+    ztest = zone.add_parser("test", help="run a shortened recipe stage for real in a zone that is in observe mode")
+    ztest.add_argument("zone")
+    ztest.add_argument("--stage", help="recipe stage to run (default: the first that fits the zone)")
+    ztest.add_argument("--speed", type=float, default=60.0, help="divide every duration in the stage by this")
+    ztest.add_argument("--minutes", type=float, default=30.0, help="how long to run")
+    broker(ztest)
+    broker(sub.add_parser("commissioning", help="list what has been tested"))
+    scenario = sub.add_parser("scenario", help="simulated runs of a site with expectations").add_subparsers(dest="action", required=True)
+    srun = scenario.add_parser("run", help="run scenario files, or every scenario of a site, and check what they expect")
+    srun.add_argument("paths", nargs="+", help="scenario files, or site directories for all of their scenarios")
+    srun.add_argument("--out", help="keep each run's database and result.json under this folder")
+    srun.add_argument("--serve", action="store_true",
+                      help="afterwards show the last run in the dashboard, read-only (keeps runs in build/scenarios)")
+    srun.add_argument("--port", type=int, default=8081, help="port for --serve (default 8081)")
+
+    doctor = sub.add_parser("doctor", help="health check of a running installation, with the fix for each failure")
+    broker(doctor)
+    doctor.add_argument("--db", help="the hub's database file, to check storage")
+    doctor.add_argument("--bundle", help="also write a diagnostics zip with secrets replaced")
+    args = parser.parse_args(argv)
+
+    root = find_repo_root(Path.cwd())
+    try:
+        catalog = Catalog.load(root)
+    except ConfigError as err:
+        print("catalog: INVALID")
+        print("\n".join(f"  {p}" for p in err.problems))
+        return 1
+    try:
+        handler = {"validate": _validate, "firmware": _firmware, "node": _node_test, "docs": _docs, "doctor": _doctor, "init": _init,
+                   "scenario": _scenario}.get(args.command, _commissioning)
+        return handler(args, root, catalog)
+    except ConfigError as err:
+        print(f"site {getattr(args, 'site', '')}: INVALID")
+        print("\n".join(f"  {p}" for p in err.problems))
+        return 1
+
+
+if __name__ == "__main__":
+    sys.exit(main())

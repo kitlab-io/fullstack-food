@@ -1,0 +1,80 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Component",
+  "description": "Generic capability, independent of any specific part",
+  "type": "object",
+  "properties": {
+    "kind": {
+      "const": "Component"
+    },
+    "id": {
+      "type": "string",
+      "pattern": "^(sensor|actuator|indicator|camera)\\.[a-z0-9_]+$"
+    },
+    "class": {
+      "enum": [
+        "sensor",
+        "actuator",
+        "indicator",
+        "camera"
+      ]
+    },
+    "description": {
+      "type": "string"
+    },
+    "measures": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "quantity": {
+            "type": "string"
+          },
+          "unit": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "quantity",
+          "unit"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "commands": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "args": {
+            "type": "object"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "safety": {
+      "type": "object",
+      "properties": {
+        "requires_lease": {
+          "type": "boolean",
+          "description": "on-commands must carry duration_s; the node switches off when it expires"
+        }
+      },
+      "required": [],
+      "additionalProperties": false
+    }
+  },
+  "required": [
+    "kind",
+    "id",
+    "class"
+  ],
+  "additionalProperties": false
+}

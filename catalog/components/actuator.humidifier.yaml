@@ -1,0 +1,8 @@
+kind: Component
+id: actuator.humidifier
+class: actuator
+description: "Raises relative humidity."
+commands:
+  - { name: "on", args: { duration_s: number, level: number } }
+  - { name: "off" }
+safety: { requires_lease: true }

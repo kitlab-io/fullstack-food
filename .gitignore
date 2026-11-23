@@ -170,3 +170,30 @@ cython_debug/
 # PyPI configuration file
 .pypirc
 .DS_Store
+
+# --- fullstack-food ---
+# Local site config and secrets (never commit)
+sites/local/
+secrets.yaml
+secrets.local.*
+wifi_secrets.py
+.env
+.env.*
+!.env.example
+
+# Runtime data
+*.db
+*.rdb
+*.log
+iot-manager/photos/
+out/
+
+# Firmware binaries (download or build; published as release assets)
+*.bin
+*.uf2
+
+# Generated docs and builds
+build/
+
+# Dashboard frontend
+node_modules/

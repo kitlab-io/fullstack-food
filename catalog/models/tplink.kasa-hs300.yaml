@@ -1,0 +1,9 @@
+kind: Model
+id: tplink.kasa-hs300
+name: "TP-Link Kasa HS300 smart power strip"
+implements: [actuator.relay, actuator.heater, actuator.humidifier, actuator.grow_light, actuator.fan, actuator.pump]
+interface: { bus: wifi, outlets: 6 }
+drivers:
+  - { runtime: kasa, status: bench }
+  - { runtime: sim, status: verified }
+notes: "Each outlet is one device. Bench script: iot-manager/devices/tests/KasaSmartPowerStrip.py"

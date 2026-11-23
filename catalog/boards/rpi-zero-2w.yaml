@@ -1,0 +1,7 @@
+kind: Board
+id: rpi-zero-2w
+name: "Raspberry Pi Zero 2 W"
+class: sbc
+runtimes: [linux]
+os: [raspberry-pi-os-bookworm, haos]
+buses: [i2c, onewire, gpio, usb, wifi]

@@ -16,7 +16,7 @@ from datastore import add_sensor_reading
 # https://python-rq.org/docs/#considerations-for-jobs
 
 # ensure the worker can access the python functions for the job
-# export PYTHONPATH="$PYTHONPATH:/Users/michael.garrido/Documents/GitHub/kitlab-io/fullstack-food/iot-manager"
+# export PYTHONPATH="$PYTHONPATH:<repo>/iot-manager"
 # https://github.com/rq/rq/issues/2035
 
 # r = Redis()

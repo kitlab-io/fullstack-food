@@ -1,0 +1,5 @@
+kind: Component
+id: sensor.analog_input
+class: sensor
+measures:
+  - { quantity: voltage, unit: V }

@@ -1,0 +1,11 @@
+kind: Scenario
+id: offline-is-not-a-dead-actuator
+title: An offline node is not also reported as a dead actuator
+duration: 40m
+timeline:
+  - { at: 10m, do: node_offline, node: incubation-node }
+expect:
+  - { at: 10m, device: inc-heater, is_on: true }
+  - { at: 40m, zone: incubation-chamber, status: offline }
+  - { at: 40m, zone: incubation-chamber, active_not: actuator_fault }
+  - { no_event: detection }

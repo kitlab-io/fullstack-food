@@ -1,0 +1,7 @@
+kind: Board
+id: sim-node
+name: "Simulated node"
+class: mcu
+runtimes: [sim]
+os: []
+buses: [i2c, onewire, gpio, adc, pwm, led_data, wifi, mains_relay, usb]

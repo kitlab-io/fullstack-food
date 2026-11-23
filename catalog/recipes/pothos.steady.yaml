@@ -1,0 +1,19 @@
+# Values are placeholders chosen to exercise the control system.
+# Check them against a growing reference, list it under sources, then set verified: true.
+
+kind: Recipe
+id: pothos.steady
+species: pothos
+mode: steady
+verified: false
+sources: []
+targets:
+  soil_moisture: { min: 25, max: 65 }
+  air_temperature: { min: 16, max: 29 }
+control:
+  - id: watering
+    actuator: actuator.pump
+    strategy: dose
+    trigger: { quantity: soil_moisture, below: 30, for: 1h }
+    dose: { volume_ml: 150 }
+    limits: { min_interval: 24h, max_daily_ml: 300 }

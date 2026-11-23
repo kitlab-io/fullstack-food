@@ -1,0 +1,10 @@
+kind: Model
+id: maxim.ds18b20
+name: "Maxim DS18B20 waterproof probe"
+implements: [sensor.soil_temperature]
+interface: { bus: onewire, supply_v: [3.0, 5.5] }
+drivers:
+  - { runtime: esphome, platform: dallas_temp, status: untested }
+  - { runtime: linux, module: w1_therm sysfs, status: bench }
+  - { runtime: sim, status: verified }
+notes: "Bench script: iot-manager/devices/tests/DS18B20.py"

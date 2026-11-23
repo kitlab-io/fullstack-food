@@ -1,0 +1,34 @@
+# Adds simulated nodes for the chosen example site and makes the hub follow simulated time.
+#   FSF_SITE   houseplants | microgreens | mushrooms   (default houseplants)
+#   FSF_SPEED  simulated seconds per real second       (default 120: one day every 12 minutes)
+services:
+  hub:
+    # Simulated time restarts with every run, so the hub starts each run with an empty
+    # database. It is a file on its own volume so other containers can read it.
+    command: ["python", "-m", "fsf_hub", "--site", "sites/examples/${FSF_SITE:-houseplants}",
+              "--mqtt-host", "broker", "--db", "/data/mock.db", "--reset-db", "--clock", "bus"]
+    volumes:
+      - mock-data:/data
+
+  web:
+    # A simulated site on a port published on this machine only: no login, unless a password
+    # hash is given (FSF_WEB_NO_LOGIN=0 FSF_WEB_PASSWORD_HASH=...), as the browser tests do.
+    environment:
+      FSF_WEB_NO_LOGIN: ${FSF_WEB_NO_LOGIN:-1}
+    command: ["python", "-m", "fsf_web", "--site", "sites/examples/${FSF_SITE:-houseplants}",
+              "--mqtt-host", "broker", "--db", "/data/mock.db", "--host", "0.0.0.0", "--clock", "bus"]
+    volumes:
+      - mock-data:/data
+
+  sim:
+    build:
+      context: ../..
+      dockerfile: deploy/Dockerfile
+    command: ["python", "-m", "fsf_sim", "--site", "sites/examples/${FSF_SITE:-houseplants}",
+              "--mqtt-host", "broker", "--speed", "${FSF_SPEED:-120}"]
+    depends_on:
+      broker:
+        condition: service_healthy
+
+volumes:
+  mock-data:

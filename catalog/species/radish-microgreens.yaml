@@ -1,0 +1,10 @@
+kind: Species
+id: radish-microgreens
+common_name: Radish microgreens
+scientific_name: Raphanus sativus
+category: microgreens
+# Limits are placeholders that bracket the example recipes. Check them against a growing
+# reference before relying on them: they are the range no recipe or override may leave.
+limits:
+  air_temperature: { min: 10, max: 30 }
+  soil_moisture: { min: 40, max: 95 }

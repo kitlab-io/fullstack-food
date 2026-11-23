@@ -1,0 +1,8 @@
+kind: Component
+id: actuator.fan
+class: actuator
+description: "Air exchange or circulation."
+commands:
+  - { name: "on", args: { duration_s: number, level: number } }
+  - { name: "off" }
+safety: { requires_lease: true }

@@ -1,0 +1,36 @@
+kind: Site
+id: houseplants
+name: "House plants: monitor and water two pots from one reservoir"
+timezone: UTC
+hub: { board: generic-linux }
+theme: default
+safety:
+  actuator_limits:
+    actuator.pump: { max_daily_ml: 400 }    # no recipe, goal or override may dose more per day
+nodes:
+  - id: shelf-node
+    board: esp32-c3-devkitm
+    runtime: sim            # change to esphome when the real node exists
+    devices:
+      # Pins were proposed by `just validate --pins`. Calibration values are examples: replace them
+      # with measured ones before trusting soil moisture or reservoir level on real hardware.
+      - { id: room-air,        model: bosch.bme280,                 as: sensor.air_temp_humidity, pins: { sda: GPIO5, scl: GPIO6 } }
+      - { id: pothos-soil,     model: generic.capacitive-soil-v1.2, as: sensor.soil_moisture, pins: { adc: soil-adc/A0 }, calibration: { dry_v: 2.6, wet_v: 1.2 } }
+      - { id: pothos-pump,     model: generic.12v-peristaltic-pump, as: actuator.pump, flow_ml_per_s: 1.6, pins: { gate: GPIO7 } }
+      - { id: snake-soil,      model: generic.capacitive-soil-v1.2, as: sensor.soil_moisture, pins: { adc: soil-adc/A1 }, calibration: { dry_v: 2.6, wet_v: 1.2 } }
+      - { id: snake-pump,      model: generic.12v-peristaltic-pump, as: actuator.pump, flow_ml_per_s: 1.6, pins: { gate: GPIO10 } }
+      - { id: reservoir-level, model: generic.hc-sr04,              as: sensor.water_level, pins: { trigger: GPIO0, echo: GPIO1 }, calibration: { empty_cm: 30, full_cm: 5 } }
+      - { id: status-strip,    model: worldsemi.sk6812-rgbw,        as: indicator.led_strip, led_count: 20, pins: { data: GPIO3 } }
+      - { id: soil-adc,        model: ti.ads1115,                   as: sensor.analog_input, pins: { sda: GPIO5, scl: GPIO6 } }
+zones:
+  - id: pothos-window
+    kind: houseplant
+    devices: [room-air, pothos-soil, pothos-pump, reservoir-level]
+    indicator: { strip: status-strip, leds: [0, 9] }
+  - id: snake-shelf
+    kind: houseplant
+    devices: [room-air, snake-soil, snake-pump, reservoir-level]
+    indicator: { strip: status-strip, leds: [10, 19] }
+plantings:
+  - { id: pothos-1, zone: pothos-window, species: pothos,      recipe: pothos.steady }
+  - { id: snake-1,  zone: snake-shelf,   species: snake-plant, recipe: snake-plant.steady, goal: vacation }

@@ -1,0 +1,17 @@
+kind: Scenario
+id: dry-pot-is-watered
+title: A dry pot is watered and the LED recovers
+duration: 2h30m
+timeline:
+  - { at: 0, do: set_zone, zone: pothos-window, soil_moisture: 20, note: Below the recipe's 25 % minimum }
+expect:
+  - { at: 10m, zone: pothos-window, status: needs_water }
+  - { at: 10m, zone: pothos-window, led: { status: needs_water, color: [0, 0, 255, 0], effect: breathe } }
+  - { at: 10m, zone: snake-shelf, status: ok, note: The other pot is unaffected }
+  - { at: 2h30m, event: dose, zone: pothos-window, where: { volume_ml: 150 }, count: 1 }
+  - { at: 2h30m, event: dose, count: 1 }
+  - { at: 2h30m, device: pothos-pump, delivered_ml: { min: 147, max: 153 }, note: The pump really moved it }
+  - { at: 2h30m, zone: pothos-window, soil_moisture: { min: 30 } }
+  - { at: 2h30m, zone: pothos-window, status: ok }
+  - { at: 2h30m, zone: pothos-window, led_sequence: [ok, needs_water, ok] }
+  - { at: 2h30m, device: pothos-pump, is_on: false }

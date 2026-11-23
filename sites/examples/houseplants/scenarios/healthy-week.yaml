@@ -1,0 +1,7 @@
+kind: Scenario
+id: healthy-week
+title: A healthy site raises no detections over a week
+duration: 7d
+tick: 120
+expect:
+  - { no_event: detection }

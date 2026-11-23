@@ -1,0 +1,9 @@
+kind: Board
+id: tplink.kasa-hs300
+name: "TP-Link Kasa HS300 smart power strip"
+class: smart_plug
+runtimes: [kasa, sim]
+os: []
+buses: [wifi, mains_relay]
+outlets: 6
+notes: "A node of its own: the fsf_kasa bridge speaks the MQTT contract for its outlets. Certified mains switching; the bridge, not the strip, ends each lease."

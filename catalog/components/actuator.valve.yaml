@@ -1,0 +1,8 @@
+kind: Component
+id: actuator.valve
+class: actuator
+description: "Opens a gravity or pressure fed water line."
+commands:
+  - { name: "on", args: { duration_s: number, level: number } }
+  - { name: "off" }
+safety: { requires_lease: true }

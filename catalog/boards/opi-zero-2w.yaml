@@ -1,0 +1,8 @@
+kind: Board
+id: opi-zero-2w
+name: "Orange Pi Zero 2W"
+class: sbc
+runtimes: [linux]
+os: [armbian-bookworm, orangepi-os-bookworm]
+buses: [i2c, onewire, gpio, usb, wifi]
+notes: "Earlier prototype ran on the 4 GB variant with Debian Bookworm."

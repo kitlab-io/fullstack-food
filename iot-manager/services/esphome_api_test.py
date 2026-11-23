@@ -1,17 +1,15 @@
 import aioesphomeapi
 import asyncio
+import os
 
 async def main():
 
 	print("connect to api server")
-	# host = "192.168.x.x"
-	host = "192.168.x.x"
-	# host = "espcam-api.local"
-	# "REMOVED"
-	password = "REMOVED="
-	# password = "REMOVED="
+	# Values live in sites/local/secrets.yaml; export them before running:
+	#   ESPHOME_HOST, ESPHOME_NOISE_PSK
+	host = os.environ["ESPHOME_HOST"]
+	password = os.environ["ESPHOME_NOISE_PSK"]
 	print(host)
-	print(password)
 	api = aioesphomeapi.APIClient(host, 6053, password=None, noise_psk=password)
 	await api.connect(login=True)
 	# await api.connect()

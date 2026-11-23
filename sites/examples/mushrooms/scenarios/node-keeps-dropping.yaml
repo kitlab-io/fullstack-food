@@ -1,0 +1,17 @@
+kind: Scenario
+id: node-keeps-dropping
+title: A node that keeps dropping off is noticed
+description: Brown-outs when the fan starts, say. Better power or signal fixes it; an hour of calm clears the status.
+duration: 1h39m
+timeline:
+  - { at: 10m, do: node_offline, node: fruiting-node }
+  - { at: 13m, do: node_offline, node: fruiting-node, active: false }
+  - { at: 18m, do: node_offline, node: fruiting-node }
+  - { at: 21m, do: node_offline, node: fruiting-node, active: false }
+  - { at: 26m, do: node_offline, node: fruiting-node }
+  - { at: 29m, do: node_offline, node: fruiting-node, active: false }
+expect:
+  - { at: 34m, zone: fruiting-chamber, status: node_unstable }
+  - { at: 34m, zone: incubation-chamber, status_not: node_unstable }
+  - { at: 34m, event: detection, where: { detail: node fruiting-node went offline 3 times in 60 min } }
+  - { at: 1h39m, zone: fruiting-chamber, status: idle }

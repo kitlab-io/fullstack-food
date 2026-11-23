@@ -1,0 +1,75 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Simulator state",
+  "description": "fsf/<site>/sim/state (retained)",
+  "type": "object",
+  "properties": {
+    "t": {
+      "type": "string"
+    },
+    "speed": {
+      "type": "number"
+    },
+    "paused": {
+      "type": "boolean"
+    },
+    "ambient": {
+      "type": "object"
+    },
+    "faults": {
+      "type": "object",
+      "properties": {
+        "dropouts": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "stuck": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          }
+        },
+        "offline_nodes": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "no_flow": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "ignoring": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "weak": {
+          "type": "object"
+        }
+      },
+      "required": [
+        "dropouts",
+        "stuck",
+        "offline_nodes",
+        "no_flow",
+        "ignoring",
+        "weak"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "required": [
+    "t",
+    "speed",
+    "paused",
+    "ambient",
+    "faults"
+  ],
+  "additionalProperties": false
+}

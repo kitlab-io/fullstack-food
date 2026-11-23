@@ -1,0 +1,95 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Theme",
+  "description": "Maps zone statuses to RGBW colour and effect, in priority order",
+  "type": "object",
+  "properties": {
+    "kind": {
+      "const": "Theme"
+    },
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9._-]*$"
+    },
+    "brightness": {
+      "type": "object",
+      "properties": {
+        "day": {
+          "type": "number"
+        },
+        "night": {
+          "type": "number"
+        },
+        "night_hours": {
+          "type": "array",
+          "items": {
+            "type": "integer"
+          },
+          "minItems": 2,
+          "maxItems": 2
+        }
+      },
+      "required": [
+        "day",
+        "night",
+        "night_hours"
+      ],
+      "additionalProperties": false
+    },
+    "priority": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "minItems": 1
+    },
+    "statuses": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "color": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 255
+            },
+            "minItems": 4,
+            "maxItems": 4
+          },
+          "effect": {
+            "enum": [
+              "solid",
+              "breathe",
+              "blink",
+              "blink_slow",
+              "off"
+            ]
+          },
+          "label": {
+            "type": "string",
+            "description": "What people call this status"
+          },
+          "meaning": {
+            "type": "string",
+            "description": "What it means and what to do, one sentence"
+          }
+        },
+        "required": [
+          "color",
+          "effect"
+        ],
+        "additionalProperties": false
+      }
+    }
+  },
+  "required": [
+    "kind",
+    "id",
+    "brightness",
+    "priority",
+    "statuses"
+  ],
+  "additionalProperties": false
+}

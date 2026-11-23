@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Command ack",
+  "description": "fsf/<site>/<node>/<device>/ack",
+  "type": "object",
+  "properties": {
+    "id": {
+      "type": "string"
+    },
+    "ok": {
+      "type": "boolean"
+    },
+    "error": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "id",
+    "ok"
+  ],
+  "additionalProperties": false
+}

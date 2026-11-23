@@ -1,0 +1,7 @@
+kind: Goal
+id: vacation
+description: "Nobody is home to refill or intervene: water less often and in smaller total volume."
+overlay:
+  control:
+    - id: watering
+      limits: { min_interval: 48h, max_daily_ml: 150 }
